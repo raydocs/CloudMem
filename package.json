@@ -1,0 +1,17 @@
+{
+  "name": "cloudmem",
+  "version": "1.0.0",
+  "description": "AI memory with cloud sync — install Claude Code hooks + GitHub session backup",
+  "type": "module",
+  "bin": {
+    "cloudmem-install": "./bin/install.mjs"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.1"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["claude", "ai", "memory", "mcp", "github"],
+  "license": "MIT"
+}

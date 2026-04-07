@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "cloudmem"
+version = "1.0.0"
+description = "AI memory with cloud sync — AAAK compression + GitHub backup"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = [
+    "chromadb>=0.4.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+cloudmem = "cloudmem.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cloudmem*"]
