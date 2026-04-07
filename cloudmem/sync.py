@@ -1,114 +1,182 @@
 """
-CloudMem sync module — push/pull palace to/from GitHub.
-Treats ~/.cloudmem/ as a git repo backed by a private GitHub repository.
+CloudMem SyncManager — push/pull the entire CloudMem storage root to/from GitHub.
+
+Repo root: ~/.cloudmem  (not just the palace subdir)
+ChromaDB binary files are excluded via .gitignore — only text/SQLite assets sync.
 """
 
 import os
 import subprocess
-import sys
 from pathlib import Path
-from .config import get_palace_path
+from datetime import datetime
+
+from .config import get_cloudmem_home, get_palace_path
 
 
-PALACE_DIR = Path(get_palace_path())
+GITIGNORE_CONTENT = """\
+# ChromaDB vector store — binary, non-portable, rebuilt on import
+chroma*/
+*.chroma/
+
+# Runtime / temp
+*.log
+*.tmp
+*.lock
+__pycache__/
+*.pyc
+cache/
+logs/
+
+# Machine-local config
+local.json
+"""
 
 
-def _run(cmd: list[str], cwd: Path = PALACE_DIR, silent: bool = False) -> int:
-    result = subprocess.run(
-        cmd, cwd=cwd,
-        stdout=subprocess.DEVNULL if silent else None,
-        stderr=subprocess.DEVNULL if silent else None,
-    )
-    return result.returncode
+class SyncResult:
+    def __init__(self, ok: bool, operation: str, **kwargs):
+        self.ok = ok
+        self.operation = operation
+        self.data = kwargs
+
+    def to_dict(self) -> dict:
+        return {"ok": self.ok, "operation": self.operation, **self.data}
+
+    def __repr__(self):
+        return f"SyncResult(ok={self.ok}, op={self.operation}, data={self.data})"
 
 
-def is_git_repo() -> bool:
-    return (PALACE_DIR / ".git").is_dir()
+class SyncManager:
+    """Manages git-based sync of the CloudMem storage root to a remote GitHub repo."""
 
+    def __init__(self, repo_root: str = None):
+        self._repo_root = Path(repo_root or get_cloudmem_home()).expanduser().resolve()
 
-def init_sync(remote_url: str) -> None:
-    """One-time setup: init palace dir as git repo and link remote."""
-    PALACE_DIR.mkdir(parents=True, exist_ok=True)
+    @property
+    def repo_root(self) -> Path:
+        return self._repo_root
 
-    if not is_git_repo():
-        _run(["git", "init"])
-        _run(["git", "branch", "-m", "main"])
+    @property
+    def lock_file(self) -> Path:
+        return self._repo_root / ".sync.lock"
 
-    gitignore = PALACE_DIR / ".gitignore"
-    if not gitignore.exists():
-        gitignore.write_text("*.log\n*.tmp\n__pycache__/\n")
+    def _run(self, cmd: list[str], silent: bool = False) -> tuple[int, str]:
+        result = subprocess.run(
+            cmd,
+            cwd=self._repo_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        return result.returncode, (result.stdout + result.stderr).strip()
 
-    remotes = subprocess.run(
-        ["git", "remote"], cwd=PALACE_DIR, capture_output=True, text=True
-    ).stdout.strip()
+    def is_git_repo(self) -> bool:
+        return (self._repo_root / ".git").is_dir()
 
-    if "origin" not in remotes:
-        _run(["git", "remote", "add", "origin", remote_url])
-    else:
-        _run(["git", "remote", "set-url", "origin", remote_url])
+    def _ensure_gitignore(self):
+        gi = self._repo_root / ".gitignore"
+        if not gi.exists():
+            gi.write_text(GITIGNORE_CONTENT)
 
-    print(f"✓ Palace synced to {remote_url}")
+    def _get_remote_url(self) -> str | None:
+        code, out = self._run(["git", "remote", "get-url", "origin"])
+        return out.strip() if code == 0 else None
 
+    def status(self) -> SyncResult:
+        if not self.is_git_repo():
+            return SyncResult(False, "status", error="not_a_git_repo",
+                              hint="Run: cloudmem sync-init <github-url>")
+        code, dirty = self._run(["git", "status", "--porcelain"])
+        remote = self._get_remote_url()
+        _, branch_out = self._run(["git", "branch", "--show-current"])
+        return SyncResult(True, "status",
+                          repo_root=str(self._repo_root),
+                          remote_url=remote,
+                          branch=branch_out.strip(),
+                          dirty=bool(dirty.strip()),
+                          sync_enabled=remote is not None)
 
-def push(message: str = None) -> bool:
-    """Commit all palace changes and push to GitHub."""
-    if not is_git_repo():
-        print("✗ Palace is not a git repo. Run: cloudmem sync-init <github-url>")
-        return False
+    def init_sync(self, remote_url: str, branch: str = "main") -> SyncResult:
+        """One-time setup: init repo and link remote."""
+        self._repo_root.mkdir(parents=True, exist_ok=True)
 
-    _run(["git", "add", "-A"])
+        if not self.is_git_repo():
+            self._run(["git", "init"])
+            self._run(["git", "branch", "-m", branch])
 
-    status = subprocess.run(
-        ["git", "status", "--porcelain"], cwd=PALACE_DIR, capture_output=True, text=True
-    ).stdout.strip()
+        self._ensure_gitignore()
 
-    if not status:
-        return True  # nothing to push
+        _, remotes = self._run(["git", "remote"])
+        if "origin" in remotes:
+            self._run(["git", "remote", "set-url", "origin", remote_url])
+        else:
+            self._run(["git", "remote", "add", "origin", remote_url])
 
-    commit_msg = message or f"palace: auto-sync"
-    code = _run(["git", "commit", "-m", commit_msg, "--quiet"])
-    if code != 0:
-        return False
+        return SyncResult(True, "sync-init",
+                          repo_root=str(self._repo_root),
+                          remote_url=remote_url,
+                          branch=branch)
 
-    code = _run(["git", "push", "-u", "origin", "main", "--quiet"])
-    if code != 0:
-        print("✗ git push failed — check remote and credentials")
-        return False
+    def push(self, message: str = None) -> SyncResult:
+        """Commit all changes and push to GitHub."""
+        if not self.is_git_repo():
+            return SyncResult(False, "push", error="not_a_git_repo")
 
-    return True
+        remote = self._get_remote_url()
+        if not remote:
+            return SyncResult(False, "push", error="no_remote_configured",
+                              hint="Run: cloudmem sync-init <github-url>")
 
+        self._run(["git", "add", "-A"])
 
-def pull() -> bool:
-    """Pull latest palace from GitHub (used on a new machine)."""
-    if not is_git_repo():
-        print("✗ Palace is not a git repo. Run: cloudmem sync-init <github-url>")
-        return False
+        code, dirty = self._run(["git", "status", "--porcelain"])
+        if not dirty.strip():
+            return SyncResult(True, "push", changed=False, message="nothing to commit")
 
-    code = _run(["git", "pull", "--rebase", "origin", "main"])
-    if code != 0:
-        print("✗ git pull failed")
-        return False
+        commit_msg = message or f"cloudmem: auto-sync {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        code, out = self._run(["git", "commit", "-m", commit_msg, "--quiet"])
+        if code != 0:
+            return SyncResult(False, "push", error="commit_failed", detail=out)
 
-    print("✓ Palace updated from GitHub")
-    return True
+        _, branch_out = self._run(["git", "branch", "--show-current"])
+        branch = branch_out.strip() or "main"
+        code, out = self._run(["git", "push", "-u", "origin", branch, "--quiet"])
+        if code != 0:
+            return SyncResult(False, "push", error="push_failed", detail=out)
 
+        _, sha_out = self._run(["git", "rev-parse", "HEAD"])
+        return SyncResult(True, "push", changed=True,
+                          commit_sha=sha_out.strip(), remote_url=remote)
 
-def clone(remote_url: str) -> bool:
-    """Bootstrap on a new machine: clone palace from GitHub."""
-    parent = PALACE_DIR.parent
-    parent.mkdir(parents=True, exist_ok=True)
+    def pull(self) -> SyncResult:
+        """Pull latest from GitHub. Refuses if working tree is dirty."""
+        if not self.is_git_repo():
+            return SyncResult(False, "pull", error="not_a_git_repo")
 
-    if PALACE_DIR.exists() and any(PALACE_DIR.iterdir()):
-        print(f"✗ {PALACE_DIR} already exists and is not empty")
-        return False
+        code, dirty = self._run(["git", "status", "--porcelain"])
+        if dirty.strip():
+            return SyncResult(False, "pull", error="dirty_worktree",
+                              hint="Commit or stash local changes before pulling")
 
-    code = subprocess.run(
-        ["git", "clone", remote_url, str(PALACE_DIR)]
-    ).returncode
+        code, out = self._run(["git", "pull", "--rebase", "origin"])
+        if code != 0:
+            return SyncResult(False, "pull", error="pull_failed", detail=out)
 
-    if code != 0:
-        print("✗ git clone failed")
-        return False
+        return SyncResult(True, "pull", detail=out)
 
-    print(f"✓ Palace restored from {remote_url}")
-    return True
+    def clone(self, remote_url: str) -> SyncResult:
+        """Bootstrap on a new machine: clone from GitHub into repo_root."""
+        if self._repo_root.exists() and any(self._repo_root.iterdir()):
+            return SyncResult(False, "clone", error="target_not_empty",
+                              path=str(self._repo_root))
+
+        self._repo_root.parent.mkdir(parents=True, exist_ok=True)
+        code, out = subprocess.run(
+            ["git", "clone", remote_url, str(self._repo_root)],
+            capture_output=True, text=True
+        ).returncode, ""
+
+        if code != 0:
+            return SyncResult(False, "clone", error="clone_failed", detail=out)
+
+        return SyncResult(True, "clone", remote_url=remote_url,
+                          repo_root=str(self._repo_root))

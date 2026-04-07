@@ -22,7 +22,14 @@ import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const { printStatus: printStatusUI } = await import(pathToFileURL(join(__dirname, 'status.mjs')).href)
+// status.mjs is optional — graceful degradation if not present
+let printStatusUI = null
+try {
+  const mod = await import(pathToFileURL(join(__dirname, 'status.mjs')).href)
+  printStatusUI = mod.printStatus
+} catch {
+  // status.mjs not available — printStatus falls back to plain text
+}
 const PKG_VERSION = (() => {
   try {
     const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
@@ -1188,13 +1195,19 @@ function printStatus() {
   if (activeSession) {
     activeSession.issueUrl = issueUrlFromState(activeSession.state)
   }
-  printStatusUI({
-    install: getInstallState(process.cwd()),
-    activeSession,
-    projectStatusCache: loadProjectStatusCache(),
-    runtimeStatus: loadRuntimeStatus(),
-    version: PKG_VERSION,
-  })
+  if (printStatusUI) {
+    printStatusUI({
+      install: getInstallState(process.cwd()),
+      activeSession,
+      projectStatusCache: loadProjectStatusCache(),
+      runtimeStatus: loadRuntimeStatus(),
+      version: PKG_VERSION,
+    })
+  } else {
+    const state = getInstallState(process.cwd())
+    console.log(`CloudMem v${PKG_VERSION} — ${state?.installed ? 'installed' : 'not installed'}`)
+    if (activeSession) console.log(`Active session: ${activeSession.issueUrl || activeSession.id}`)
+  }
 }
 
 function runDoctor() {

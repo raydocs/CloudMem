@@ -44,7 +44,6 @@ def cmd_init(args):
     import json
     from pathlib import Path
     from .entity_detector import scan_for_detection, detect_entities, confirm_entities
-    from .room_detector_local import detect_rooms_local
 
     # Pass 1: auto-detect people and projects from file content
     print(f"\n  Scanning for entities in: {args.dir}")
@@ -64,13 +63,14 @@ def cmd_init(args):
         else:
             print("  No entities detected — proceeding with directory-based rooms.")
 
-    # Pass 2: detect rooms from folder structure
-    detect_rooms_local(project_dir=args.dir)
+    # Pass 2: initialize config (room detection via folder structure is done at mine time)
     MempalaceConfig().init()
+    print(f"  Initialized palace config.")
 
 
 def cmd_mine(args):
     palace_path = os.path.expanduser(args.palace) if args.palace else MempalaceConfig().palace_path
+    quiet = getattr(args, "quiet", False)
 
     if args.mode == "convos":
         from .convo_miner import mine_convos
@@ -83,6 +83,7 @@ def cmd_mine(args):
             limit=args.limit,
             dry_run=args.dry_run,
             extract_mode=args.extract,
+            quiet=quiet,
         )
     else:
         from .miner import mine
@@ -265,14 +266,14 @@ def cmd_compress(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="MemPalace — Give your AI a memory. No API key required.",
+        description="CloudMem — AI memory with cloud sync. No API key required.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
     parser.add_argument(
         "--palace",
         default=None,
-        help="Where the palace lives (default: from ~/.mempalace/config.json or ~/.mempalace/palace)",
+        help="Where the palace lives (default: ~/.cloudmem/palace)",
     )
 
     sub = parser.add_subparsers(dest="command")
@@ -302,6 +303,9 @@ def main():
     p_mine.add_argument("--limit", type=int, default=0, help="Max files to process (0 = all)")
     p_mine.add_argument(
         "--dry-run", action="store_true", help="Show what would be filed without filing"
+    )
+    p_mine.add_argument(
+        "--quiet", action="store_true", help="Suppress stdout, only log errors to stderr"
     )
     p_mine.add_argument(
         "--extract",
@@ -360,8 +364,11 @@ def main():
     sub.add_parser("status", help="Show what's been filed")
 
     # sync-init
-    p_sync_init = sub.add_parser("sync-init", help="Link palace to a private GitHub repo")
+    p_sync_init = sub.add_parser("sync-init", help="Link CloudMem storage root to a private GitHub repo")
     p_sync_init.add_argument("url", help="GitHub remote URL (SSH or HTTPS)")
+
+    # sync-status
+    sub.add_parser("sync-status", help="Show cloud sync status")
 
     # push
     p_push = sub.add_parser("push", help="Push palace to GitHub")
@@ -374,11 +381,29 @@ def main():
     p_clone = sub.add_parser("clone", help="Restore palace on a new machine")
     p_clone.add_argument("url", help="GitHub remote URL")
 
+    # session-finalize (called by post-session.sh hook, reads stdin JSON)
+    p_sf = sub.add_parser("session-finalize", help=argparse.SUPPRESS)
+    p_sf.add_argument("--hook-json-stdin", action="store_true",
+                      help="Read Claude Code hook JSON from stdin")
+    p_sf.add_argument("--session-id", default=None)
+    p_sf.add_argument("--transcript", default=None, help="Path to transcript file")
+
     args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
         return
+
+    def _sync_cmd(fn_name, *fn_args):
+        from .sync import SyncManager
+        mgr = SyncManager()
+        result = getattr(mgr, fn_name)(*fn_args)
+        d = result.to_dict()
+        if d.get("ok"):
+            print(f"✓ {d.get('operation', fn_name)}", d.get("detail", d.get("message", "")))
+        else:
+            print(f"✗ {d.get('error', 'failed')}", d.get("hint", d.get("detail", "")),
+                  file=sys.stderr)
 
     dispatch = {
         "init": cmd_init,
@@ -388,12 +413,25 @@ def main():
         "compress": cmd_compress,
         "wake-up": cmd_wakeup,
         "status": cmd_status,
-        "sync-init": lambda a: __import__("cloudmem.sync", fromlist=["init_sync"]).init_sync(a.url),
-        "push": lambda a: __import__("cloudmem.sync", fromlist=["push"]).push(a.message),
-        "pull": lambda a: __import__("cloudmem.sync", fromlist=["pull"]).pull(),
-        "clone": lambda a: __import__("cloudmem.sync", fromlist=["clone"]).clone(a.url),
+        "sync-init": lambda a: _sync_cmd("init_sync", a.url),
+        "sync-status": lambda a: _sync_cmd("status"),
+        "push": lambda a: _sync_cmd("push", a.message),
+        "pull": lambda a: _sync_cmd("pull"),
+        "clone": lambda a: _sync_cmd("clone", a.url),
+        "session-finalize": lambda a: _cmd_session_finalize(a),
     }
     dispatch[args.command](args)
+
+
+def _cmd_session_finalize(args):
+    """Orchestrate post-session: ingest transcript + push palace."""
+    from .session_finalizer import SessionFinalizer
+    finalizer = SessionFinalizer()
+    finalizer.run(
+        hook_json_stdin=getattr(args, "hook_json_stdin", False),
+        session_id=getattr(args, "session_id", None),
+        transcript_path=getattr(args, "transcript", None),
+    )
 
 
 if __name__ == "__main__":

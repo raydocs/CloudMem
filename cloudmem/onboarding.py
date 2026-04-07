@@ -12,13 +12,13 @@ Seeds the entity_registry with confirmed data so MemPalace knows your world
 from minute one — before a single session is indexed.
 
 Usage:
-    python3 -m mempalace.onboarding
+    python3 -m cloudmem.onboarding
     or: mempalace init
 """
 
 from pathlib import Path
-from mempalace.entity_registry import EntityRegistry
-from mempalace.entity_detector import detect_entities, scan_for_detection
+from cloudmem.entity_registry import EntityRegistry
+from cloudmem.entity_detector import detect_entities, scan_for_detection
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -249,7 +249,7 @@ def _warn_ambiguous(people: list) -> list:
     Flag names that are also common English words.
     Returns list of ambiguous names for user awareness.
     """
-    from mempalace.entity_registry import COMMON_ENGLISH_WORDS
+    from cloudmem.entity_registry import COMMON_ENGLISH_WORDS
 
     ambiguous = []
     for p in people:

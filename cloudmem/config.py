@@ -8,8 +8,23 @@ import json
 import os
 from pathlib import Path
 
-DEFAULT_PALACE_PATH = os.path.expanduser("~/.mempalace/palace")
+DEFAULT_CLOUDMEM_HOME = os.path.expanduser("~/.cloudmem")
+DEFAULT_PALACE_PATH = os.path.join(DEFAULT_CLOUDMEM_HOME, "palace")
 DEFAULT_COLLECTION_NAME = "mempalace_drawers"
+
+
+def get_palace_path() -> str:
+    """Return the palace path from env or default config."""
+    env_val = os.environ.get("CLOUDMEM_PALACE_PATH") or os.environ.get("MEMPALACE_PALACE_PATH")
+    if env_val:
+        return env_val
+    return DEFAULT_PALACE_PATH
+
+
+def get_cloudmem_home() -> str:
+    """Return the CloudMem storage root directory."""
+    return os.environ.get("CLOUDMEM_HOME", DEFAULT_CLOUDMEM_HOME)
+
 
 DEFAULT_TOPIC_WINGS = [
     "emotions",
@@ -147,3 +162,7 @@ class MempalaceConfig:
         with open(self._people_map_file, "w") as f:
             json.dump(people_map, f, indent=2)
         return self._people_map_file
+
+
+# Alias: CloudMemConfig is the same as MempalaceConfig
+CloudMemConfig = MempalaceConfig
