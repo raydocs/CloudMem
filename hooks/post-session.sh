@@ -1,34 +1,21 @@
 #!/bin/bash
-# CloudMem post-session hook
-# Runs after every Claude Code session stop.
-# 1. MemPalace save (from MemPalace hooks)
-# 2. Ingest latest Claude session into palace
-# 3. Push palace to GitHub
+# CloudMem post-session hook — thin wrapper
+# Reads Claude Code hook JSON from stdin, delegates all work to Python SessionFinalizer.
+# Always exits 0 to avoid interrupting Claude Code's session end.
 
 set -euo pipefail
 
-PALACE_DIR="${CLOUDMEM_PALACE:-$HOME/.cloudmem}"
-CLAUDE_PROJECTS="${CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}"
+PYTHON_BIN="${CLOUDMEM_PYTHON:-python3}"
+LOG_FILE="${CLOUDMEM_LOG:-${HOME}/.cloudmem/logs/post-session.log}"
 
-# ── Step 1: MemPalace structured save ───────────────────────────────────────
-if command -v cloudmem &>/dev/null; then
-  cloudmem save --quiet 2>/dev/null || true
-fi
+mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
 
-# ── Step 2: Ingest most recent Claude session ────────────────────────────────
-if command -v cloudmem &>/dev/null && [ -d "$CLAUDE_PROJECTS" ]; then
-  LAST_SESSION=$(ls -t "$CLAUDE_PROJECTS" 2>/dev/null | head -1)
-  if [ -n "$LAST_SESSION" ]; then
-    cloudmem mine "$CLAUDE_PROJECTS/$LAST_SESSION" --mode convos --quiet 2>/dev/null || true
-  fi
-fi
+# Read stdin (may contain Claude Code hook JSON)
+HOOK_INPUT=$(cat)
 
-# ── Step 3: Push palace to GitHub ───────────────────────────────────────────
-if [ -d "$PALACE_DIR/.git" ]; then
-  cd "$PALACE_DIR"
-  git add -A
-  if ! git diff --cached --quiet; then
-    git commit -m "palace: $(date '+%Y-%m-%d %H:%M')" --quiet 2>/dev/null || true
-    git push --quiet 2>/dev/null || true
-  fi
-fi
+{
+  echo "--- $(date '+%Y-%m-%d %H:%M:%S') post-session ---"
+  echo "$HOOK_INPUT" | "$PYTHON_BIN" -m cloudmem session-finalize --hook-json-stdin 2>&1
+} >> "$LOG_FILE" 2>&1 || true
+
+exit 0

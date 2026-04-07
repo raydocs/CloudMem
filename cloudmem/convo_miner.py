@@ -226,6 +226,85 @@ def file_already_mined(collection, source_file: str) -> bool:
         return False
 
 
+def mine_convo_file(
+    filepath,
+    palace_path: str,
+    wing: str = None,
+    agent: str = "cloudmem",
+    dry_run: bool = False,
+    extract_mode: str = "exchange",
+    metadata_overrides: dict = None,
+    quiet: bool = False,
+) -> dict:
+    """Ingest a single conversation file into the palace.
+
+    Returns: {"drawers_added": int, "wing": str, "room": str, "skipped": bool}
+    """
+    from pathlib import Path
+    from datetime import datetime
+    import hashlib
+
+    filepath = Path(filepath).expanduser().resolve()
+    if not wing:
+        wing = filepath.parent.name.lower().replace(" ", "_").replace("-", "_")
+
+    source_file = str(filepath)
+    collection = get_collection(palace_path) if not dry_run else None
+
+    if not dry_run and file_already_mined(collection, source_file):
+        return {"drawers_added": 0, "wing": wing, "room": None, "skipped": True}
+
+    try:
+        content = normalize(source_file)
+    except Exception:
+        return {"drawers_added": 0, "wing": wing, "room": None, "skipped": False, "error": "normalize_failed"}
+
+    if not content or len(content.strip()) < MIN_CHUNK_SIZE:
+        return {"drawers_added": 0, "wing": wing, "room": None, "skipped": False}
+
+    if extract_mode == "general":
+        from .general_extractor import extract_memories
+        chunks = extract_memories(content)
+    else:
+        chunks = chunk_exchanges(content)
+
+    if not chunks:
+        return {"drawers_added": 0, "wing": wing, "room": "general", "skipped": False}
+
+    room = detect_convo_room(content) if extract_mode != "general" else None
+
+    if dry_run:
+        return {"drawers_added": len(chunks), "wing": wing, "room": room or "general", "skipped": False, "dry_run": True}
+
+    base_meta = {
+        "wing": wing,
+        "source_file": source_file,
+        "added_by": agent,
+        "filed_at": datetime.now().isoformat(),
+        "ingest_mode": "convos",
+        "extract_mode": extract_mode,
+    }
+    if metadata_overrides:
+        base_meta.update(metadata_overrides)
+
+    drawers_added = 0
+    for chunk in chunks:
+        chunk_room = chunk.get("memory_type", room) if extract_mode == "general" else room
+        drawer_id = f"drawer_{wing}_{chunk_room}_{hashlib.md5((source_file + str(chunk['chunk_index'])).encode()).hexdigest()[:16]}"
+        meta = {**base_meta, "room": chunk_room, "chunk_index": chunk["chunk_index"]}
+        try:
+            collection.add(documents=[chunk["content"]], ids=[drawer_id], metadatas=[meta])
+            drawers_added += 1
+        except Exception as e:
+            if "already exists" not in str(e).lower():
+                raise
+
+    if not quiet:
+        print(f"  ✓ {filepath.name} → {drawers_added} drawers (wing:{wing} room:{room or 'general'})")
+
+    return {"drawers_added": drawers_added, "wing": wing, "room": room or "general", "skipped": False}
+
+
 # =============================================================================
 # SCAN FOR CONVERSATION FILES
 # =============================================================================
@@ -257,6 +336,7 @@ def mine_convos(
     limit: int = 0,
     dry_run: bool = False,
     extract_mode: str = "exchange",
+    quiet: bool = False,
 ):
     """Mine a directory of conversation files into the palace.
 
@@ -273,16 +353,17 @@ def mine_convos(
     if limit > 0:
         files = files[:limit]
 
-    print(f"\n{'=' * 55}")
-    print("  MemPalace Mine — Conversations")
-    print(f"{'=' * 55}")
-    print(f"  Wing:    {wing}")
-    print(f"  Source:  {convo_path}")
-    print(f"  Files:   {len(files)}")
-    print(f"  Palace:  {palace_path}")
-    if dry_run:
-        print("  DRY RUN — nothing will be filed")
-    print(f"{'─' * 55}\n")
+    if not quiet:
+        print(f"\n{'=' * 55}")
+        print("  MemPalace Mine — Conversations")
+        print(f"{'=' * 55}")
+        print(f"  Wing:    {wing}")
+        print(f"  Source:  {convo_path}")
+        print(f"  Files:   {len(files)}")
+        print(f"  Palace:  {palace_path}")
+        if dry_run:
+            print("  DRY RUN — nothing will be filed")
+        print(f"{'─' * 55}\n")
 
     collection = get_collection(palace_path) if not dry_run else None
 
@@ -326,14 +407,15 @@ def mine_convos(
             room = None  # set per-chunk below
 
         if dry_run:
-            if extract_mode == "general":
-                from collections import Counter
+            if not quiet:
+                if extract_mode == "general":
+                    from collections import Counter
 
-                type_counts = Counter(c.get("memory_type", "general") for c in chunks)
-                types_str = ", ".join(f"{t}:{n}" for t, n in type_counts.most_common())
-                print(f"    [DRY RUN] {filepath.name} → {len(chunks)} memories ({types_str})")
-            else:
-                print(f"    [DRY RUN] {filepath.name} → room:{room} ({len(chunks)} drawers)")
+                    type_counts = Counter(c.get("memory_type", "general") for c in chunks)
+                    types_str = ", ".join(f"{t}:{n}" for t, n in type_counts.most_common())
+                    print(f"    [DRY RUN] {filepath.name} → {len(chunks)} memories ({types_str})")
+                else:
+                    print(f"    [DRY RUN] {filepath.name} → room:{room} ({len(chunks)} drawers)")
             total_drawers += len(chunks)
             # Track room counts
             if extract_mode == "general":
@@ -376,19 +458,21 @@ def mine_convos(
                     raise
 
         total_drawers += drawers_added
-        print(f"  ✓ [{i:4}/{len(files)}] {filepath.name[:50]:50} +{drawers_added}")
+        if not quiet:
+            print(f"  ✓ [{i:4}/{len(files)}] {filepath.name[:50]:50} +{drawers_added}")
 
-    print(f"\n{'=' * 55}")
-    print("  Done.")
-    print(f"  Files processed: {len(files) - files_skipped}")
-    print(f"  Files skipped (already filed): {files_skipped}")
-    print(f"  Drawers filed: {total_drawers}")
-    if room_counts:
-        print("\n  By room:")
-        for room, count in sorted(room_counts.items(), key=lambda x: x[1], reverse=True):
-            print(f"    {room:20} {count} files")
-    print('\n  Next: mempalace search "what you\'re looking for"')
-    print(f"{'=' * 55}\n")
+    if not quiet:
+        print(f"\n{'=' * 55}")
+        print("  Done.")
+        print(f"  Files processed: {len(files) - files_skipped}")
+        print(f"  Files skipped (already filed): {files_skipped}")
+        print(f"  Drawers filed: {total_drawers}")
+        if room_counts:
+            print("\n  By room:")
+            for room, count in sorted(room_counts.items(), key=lambda x: x[1], reverse=True):
+                print(f"    {room:20} {count} files")
+        print('\n  Next: mempalace search "what you\'re looking for"')
+        print(f"{'=' * 55}\n")
 
 
 if __name__ == "__main__":

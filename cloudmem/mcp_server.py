@@ -436,6 +436,30 @@ def tool_diary_read(agent_name: str, last_n: int = 10):
         return {"error": str(e)}
 
 
+# ==================== SYNC TOOLS ====================
+
+
+def handle_mempalace_sync_status():
+    from .sync import SyncManager
+    mgr = SyncManager()
+    result = mgr.status()
+    return result.to_dict()
+
+
+def handle_mempalace_push(message=None):
+    from .sync import SyncManager
+    mgr = SyncManager()
+    result = mgr.push(message=message)
+    return result.to_dict()
+
+
+def handle_mempalace_pull():
+    from .sync import SyncManager
+    mgr = SyncManager()
+    result = mgr.pull()
+    return result.to_dict()
+
+
 # ==================== MCP PROTOCOL ====================
 
 TOOLS = {
@@ -684,6 +708,38 @@ TOOLS = {
             "required": ["agent_name"],
         },
         "handler": tool_diary_read,
+    },
+    "mempalace_sync_status": {
+        "description": "Show cloud sync status — whether the palace is linked to GitHub and if there are uncommitted changes.",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        "handler": handle_mempalace_sync_status,
+    },
+    "mempalace_push": {
+        "description": "Push palace changes to GitHub. Use after adding memories or making important changes.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "description": "Optional commit message",
+                }
+            },
+            "required": [],
+        },
+        "handler": handle_mempalace_push,
+    },
+    "mempalace_pull": {
+        "description": "Pull latest palace from GitHub. Useful to sync after changes from another machine.",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        "handler": handle_mempalace_pull,
     },
 }
 

@@ -264,6 +264,88 @@ def cmd_compress(args):
         print("  (dry run -- nothing stored)")
 
 
+def cmd_export(args):
+    """Export palace drawers to a portable JSON snapshot."""
+    import json
+    import chromadb
+    from datetime import datetime
+    from .config import MempalaceConfig
+
+    palace_path = os.path.expanduser(args.palace) if args.palace else MempalaceConfig().palace_path
+    output = args.output or f"cloudmem_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    wing_filter = getattr(args, "wing", None)
+
+    try:
+        client = chromadb.PersistentClient(path=palace_path)
+        col = client.get_collection("mempalace_drawers")
+    except Exception:
+        print(f"✗ No palace found at {palace_path}")
+        sys.exit(1)
+
+    kwargs = {"include": ["documents", "metadatas"]}
+    if wing_filter:
+        kwargs["where"] = {"wing": wing_filter}
+    results = col.get(**kwargs)
+
+    snapshot = {
+        "version": 1,
+        "exported_at": datetime.now().isoformat(),
+        "palace_path": palace_path,
+        "wing_filter": wing_filter,
+        "count": len(results["ids"]),
+        "drawers": [
+            {"id": id_, "content": doc, "metadata": meta}
+            for id_, doc, meta in zip(results["ids"], results["documents"], results["metadatas"])
+        ]
+    }
+
+    with open(output, "w") as f:
+        json.dump(snapshot, f, indent=2)
+
+    print(f"✓ Exported {snapshot['count']} drawers → {output}")
+
+
+def cmd_import(args):
+    """Import a portable JSON snapshot into the palace (rebuilds ChromaDB embeddings)."""
+    import json
+    import chromadb
+    from .config import MempalaceConfig
+
+    palace_path = os.path.expanduser(args.palace) if args.palace else MempalaceConfig().palace_path
+    dry_run = getattr(args, "dry_run", False)
+
+    with open(args.file) as f:
+        snapshot = json.load(f)
+
+    drawers = snapshot.get("drawers", [])
+    print(f"  Found {len(drawers)} drawers in snapshot (exported: {snapshot.get('exported_at', 'unknown')})")
+
+    if dry_run:
+        print(f"  DRY RUN — would import {len(drawers)} drawers into {palace_path}")
+        return
+
+    client = chromadb.PersistentClient(path=palace_path)
+    col = client.get_or_create_collection("mempalace_drawers")
+
+    imported = 0
+    skipped = 0
+    for drawer in drawers:
+        try:
+            col.add(
+                ids=[drawer["id"]],
+                documents=[drawer["content"]],
+                metadatas=[drawer["metadata"]],
+            )
+            imported += 1
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                skipped += 1
+            else:
+                print(f"  ✗ {drawer['id']}: {e}")
+
+    print(f"✓ Imported {imported} drawers ({skipped} already existed) → {palace_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="CloudMem — AI memory with cloud sync. No API key required.",
@@ -381,6 +463,16 @@ def main():
     p_clone = sub.add_parser("clone", help="Restore palace on a new machine")
     p_clone.add_argument("url", help="GitHub remote URL")
 
+    # export
+    p_export = sub.add_parser("export", help="Export palace to portable AAAK JSON snapshot")
+    p_export.add_argument("--output", "-o", default=None, help="Output file (default: cloudmem_export_YYYYMMDD.json)")
+    p_export.add_argument("--wing", default=None, help="Export only this wing")
+
+    # import
+    p_import = sub.add_parser("import", help="Import an AAAK JSON snapshot (rebuilds ChromaDB embeddings)")
+    p_import.add_argument("file", help="Path to export file")
+    p_import.add_argument("--dry-run", action="store_true", help="Preview without importing")
+
     # session-finalize (called by post-session.sh hook, reads stdin JSON)
     p_sf = sub.add_parser("session-finalize", help=argparse.SUPPRESS)
     p_sf.add_argument("--hook-json-stdin", action="store_true",
@@ -418,6 +510,8 @@ def main():
         "push": lambda a: _sync_cmd("push", a.message),
         "pull": lambda a: _sync_cmd("pull"),
         "clone": lambda a: _sync_cmd("clone", a.url),
+        "export": cmd_export,
+        "import": cmd_import,
         "session-finalize": lambda a: _cmd_session_finalize(a),
     }
     dispatch[args.command](args)
