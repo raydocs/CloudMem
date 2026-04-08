@@ -1,380 +1,749 @@
 <!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CloudMem · Thread Ledger</title>
-    <style>
-      :root {
-        --bg: #070b14;
-        --panel: #0e1525cc;
-        --line: #ffffff1a;
-        --text: #e8ecff;
-        --muted: #a8b3d1;
-        --brand: #7c8dff;
-        --brand2: #53d3ff;
-        --ok: #56d39b;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        color: var(--text);
-        background:
-          radial-gradient(1200px 700px at 10% -10%, #3348ff30, transparent 60%),
-          radial-gradient(900px 600px at 90% -20%, #27d4ff2b, transparent 60%),
-          var(--bg);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-      }
-      .wrap { max-width: 1240px; margin: 0 auto; padding: 22px; }
-      .top {
-        border: 1px solid var(--line);
-        background: linear-gradient(180deg, #141e36c7, #0e1525c2);
-        backdrop-filter: blur(10px);
-        border-radius: 16px;
-        padding: 14px;
-        box-shadow: 0 20px 60px #00000040;
-      }
-      .title { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
-      .dot { width: 10px; height: 10px; border-radius: 999px; background: linear-gradient(90deg, var(--brand), var(--brand2)); }
-      h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: .2px; }
-      .muted { color: var(--muted); font-size: 12px; }
-      .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-      input, button, select {
-        border: 1px solid var(--line);
-        background: #0c1322;
-        color: var(--text);
-        padding: 9px 12px;
-        border-radius: 10px;
-        font: inherit;
-      }
-      input.api { flex: 1; min-width: 320px; }
-      button {
-        cursor: pointer;
-        background: linear-gradient(90deg, #5f72ff, #49d1ff);
-        color: #081120;
-        font-weight: 650;
-        border: none;
-      }
-      .btn-ghost { background: #111a2dcc; color: var(--text); border: 1px solid var(--line); }
-      .stats { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
-      .chip {
-        border: 1px solid var(--line);
-        background: #101a2fbf;
-        border-radius: 999px;
-        padding: 6px 10px;
-        font-size: 12px;
-        color: var(--muted);
-      }
-      .grid { margin-top: 14px; display: grid; grid-template-columns: 420px 1fr; gap: 14px; }
-      .card {
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        background: var(--panel);
-        backdrop-filter: blur(10px);
-        min-height: 66vh;
-        box-shadow: 0 12px 40px #0000002e;
-      }
-      .card h2 { margin: 0; padding: 14px 14px 10px; font-size: 14px; color: #d6defb; }
-      .list-controls { display:flex; gap:8px; flex-wrap:wrap; padding: 0 10px 10px; }
-      .list { max-height: calc(66vh - 128px); overflow: auto; padding: 0 10px 10px; }
-      .item {
-        border: 1px solid #ffffff16;
-        border-radius: 12px;
-        padding: 10px;
-        margin-bottom: 8px;
-        cursor: pointer;
-        background: linear-gradient(180deg, #121d33b8, #0f172a9e);
-      }
-      .item:hover, .item.active { border-color: #95a8ff88; }
-      .id { font-size: 13px; font-weight: 600; word-break: break-all; }
-      .meta { margin-top: 5px; color: var(--muted); font-size: 12px; }
-      .right-head {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 12px 14px; border-bottom: 1px solid var(--line);
-      }
-      .badge { color: #082018; background: var(--ok); padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-      .section { padding: 12px 14px; border-bottom: 1px solid var(--line); }
-      .mini-grid { display:grid; gap:8px; grid-template-columns: repeat(3, minmax(0,1fr)); }
-      .mini {
-        border:1px solid var(--line);
-        border-radius:10px;
-        padding:8px;
-        background:#101a2fbf;
-      }
-      .mini .k { font-size:11px; color:var(--muted); }
-      .mini .v { margin-top:3px; font-size:14px; font-weight:650; }
-      canvas { width:100%; height:140px; display:block; border-radius:10px; background:#0b1220; border:1px solid var(--line); }
-      pre { margin: 0; padding: 14px; white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.5; color: #dbe5ff; }
-      code { color: #c8d6ff; }
-      @media (max-width: 980px) {
-        .grid { grid-template-columns: 1fr; }
-        .card { min-height: 46vh; }
-        .list { max-height: 36vh; }
-        .mini-grid { grid-template-columns: 1fr 1fr; }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <section class="top">
-        <div class="title">
-          <div class="dot"></div>
-          <h1>CloudMem Thread Ledger</h1>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CloudMem · Threads</title>
+  <style>
+    :root {
+      --bg: #f8f9fb;
+      --surface: #ffffff;
+      --border: #e5e7eb;
+      --border-light: #f0f1f3;
+      --text: #111827;
+      --text-secondary: #6b7280;
+      --text-muted: #9ca3af;
+      --brand: #6366f1;
+      --brand-light: #eef2ff;
+      --green: #16a34a;
+      --red: #dc2626;
+      --amber: #ca8a04;
+      --green-bg: #f0fdf4;
+      --red-bg: #fef2f2;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-lg: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; }
+
+    /* ── Top Nav ── */
+    .nav {
+      height: 52px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-logo {
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--brand);
+      letter-spacing: -0.3px;
+    }
+    .nav-logo span { color: var(--text); }
+    .nav-link {
+      margin-left: 20px;
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .nav-link:hover { color: var(--text); }
+    .nav-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .settings-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .settings-btn:hover { background: var(--bg); }
+
+    /* ── Config Panel ── */
+    .config-panel {
+      display: none;
+      position: fixed;
+      top: 52px;
+      right: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow-lg);
+      z-index: 200;
+      width: 400px;
+    }
+    .config-panel.open { display: block; }
+    .config-panel label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+    .config-panel input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 13px;
+      margin: 6px 0 12px;
+      outline: none;
+    }
+    .config-panel input:focus { border-color: var(--brand); }
+    .config-actions { display: flex; gap: 8px; }
+    .btn-primary {
+      background: var(--brand);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 7px 14px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-secondary {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 14px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    /* ── Summary Bar ── */
+    .summary {
+      display: flex;
+      gap: 10px;
+      padding: 14px 20px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--border-light);
+      background: var(--surface);
+    }
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 12px;
+    }
+    .chip b { color: var(--text); font-weight: 600; }
+
+    /* ── Layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 340px 1fr 300px;
+      height: calc(100vh - 52px - 49px);
+    }
+
+    /* ── Left Panel ── */
+    .panel-left {
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .filters {
+      padding: 12px;
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .filters input, .filters select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      font: inherit;
+      font-size: 13px;
+      outline: none;
+      background: var(--surface);
+    }
+    .filters input:focus { border-color: var(--brand); }
+    .filter-row { display: flex; gap: 6px; }
+    .filter-row select { flex: 1; }
+    .thread-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .thread-item {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-light);
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    .thread-item:hover { background: #f9fafb; }
+    .thread-item.active {
+      background: var(--brand-light);
+      border-left-color: var(--brand);
+    }
+    .thread-id {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .thread-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+    .thread-badges {
+      display: flex;
+      gap: 5px;
+      margin-top: 5px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .badge-ok { background: var(--green-bg); color: var(--green); }
+    .badge-err { background: var(--red-bg); color: var(--red); }
+    .badge-mode { background: #f0f0ff; color: var(--brand); }
+
+    /* ── Center ── */
+    .panel-center {
+      overflow-y: auto;
+      padding: 24px 28px;
+    }
+    .detail-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    .detail-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+    .stat-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+    .stat-value { font-size: 20px; font-weight: 700; margin-top: 4px; }
+    .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    .diff-line {
+      display: flex;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .diff-add { color: var(--green); }
+    .diff-del { color: var(--red); }
+    .diff-mod { color: var(--amber); }
+
+    .chart-section {
+      margin-top: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .chart-title { font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; font-weight: 600; }
+    canvas {
+      width: 100%;
+      height: 130px;
+      display: block;
+      border-radius: 8px;
+    }
+
+    .progress-bar {
+      height: 6px;
+      background: var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--brand);
+      border-radius: 999px;
+      transition: width 0.3s;
+    }
+
+    /* ── Right Sidebar ── */
+    .panel-right {
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      overflow-y: auto;
+      padding: 20px;
+    }
+    .sidebar-section {
+      margin-bottom: 20px;
+    }
+    .sidebar-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+    .sidebar-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    .sidebar-icon {
+      width: 18px;
+      text-align: center;
+      font-size: 14px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .sidebar-label { color: var(--text-muted); min-width: 0; }
+    .sidebar-value {
+      color: var(--text);
+      font-weight: 500;
+      word-break: break-all;
+    }
+    .sidebar-value a { color: var(--brand); text-decoration: none; }
+    .sidebar-value a:hover { text-decoration: underline; }
+    .cli-box {
+      background: #f4f4f7;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .cli-box .copy-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 14px;
+      padding: 2px;
+    }
+    .cli-box .copy-btn:hover { color: var(--text); }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-muted);
+      font-size: 14px;
+      gap: 8px;
+    }
+    .empty-state .icon { font-size: 32px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 1024px) {
+      .layout { grid-template-columns: 280px 1fr; }
+      .panel-right { display: none; }
+    }
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; height: auto; }
+      .panel-left { max-height: 40vh; }
+      .summary { padding: 10px 14px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav class="nav">
+    <div class="nav-logo">☁️ Cloud<span>Mem</span></div>
+    <a class="nav-link" href="#">🧵 Threads</a>
+    <div class="nav-right">
+      <button class="settings-btn" id="settingsBtn">⚙️ API</button>
+    </div>
+  </nav>
+
+  <!-- Config Panel -->
+  <div class="config-panel" id="configPanel">
+    <label>API Base URL</label>
+    <input id="apiInput" placeholder="https://api.littlescene.com" />
+    <div class="config-actions">
+      <button class="btn-primary" id="saveBtn">Save & Refresh</button>
+      <button class="btn-secondary" id="refreshBtn">Refresh</button>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary">
+    <div class="chip">📊 Threads: <b id="sTot">-</b></div>
+    <div class="chip">🎯 Tokens: <b id="sTok">-</b></div>
+    <div class="chip">💰 Cost: <b id="sCost">-</b></div>
+    <div class="chip">🕐 Last: <b id="sLast">-</b></div>
+  </div>
+
+  <!-- Layout -->
+  <div class="layout">
+    <!-- Left: Thread List -->
+    <div class="panel-left">
+      <div class="filters">
+        <input id="search" placeholder="Search thread, repo, branch…" />
+        <div class="filter-row">
+          <select id="repoFilter"><option value="">All repos</option></select>
+          <select id="branchFilter"><option value="">All branches</option></select>
         </div>
-        <div class="row">
-          <input id="api" class="api" placeholder="API 基地址（例如 https://api.littlescene.com）" />
-          <button id="save">保存并刷新</button>
-          <button id="load" class="btn-ghost">仅刷新</button>
-        </div>
-        <div class="muted" style="margin-top:8px">推荐：Worker 用 <code>api.littlescene.com</code>，Pages 用 <code>threads.littlescene.com</code></div>
-        <div class="stats">
-          <span class="chip" id="statCount">会话：-</span>
-          <span class="chip" id="statTokens">Tokens：-</span>
-          <span class="chip" id="statCost">成本：-</span>
-          <span class="chip" id="statLast">最近结束：-</span>
-        </div>
-      </section>
-
-      <section class="grid">
-        <article class="card">
-          <h2>线程列表</h2>
-          <div class="list-controls">
-            <input id="search" placeholder="搜索 thread_id / repo / branch" />
-            <select id="repo"><option value="">全部仓库</option></select>
-            <select id="branch"><option value="">全部分支</option></select>
-          </div>
-          <div id="threads" class="list">准备加载...</div>
-        </article>
-
-        <article class="card">
-          <div class="right-head">
-            <h2 style="padding:0">仪表盘</h2>
-            <span class="badge">LIVE</span>
-          </div>
-
-          <div class="section">
-            <div class="muted" style="margin-bottom:8px">最近 7 天会话趋势</div>
-            <canvas id="chart" width="760" height="140"></canvas>
-          </div>
-
-          <div class="section">
-            <div class="mini-grid">
-              <div class="mini"><div class="k">筛选后会话</div><div class="v" id="kpiSessions">-</div></div>
-              <div class="mini"><div class="k">输入 Tokens</div><div class="v" id="kpiInput">-</div></div>
-              <div class="mini"><div class="k">输出 Tokens</div><div class="v" id="kpiOutput">-</div></div>
-            </div>
-          </div>
-
-          <pre id="detail">点击左侧线程查看详情</pre>
-        </article>
-      </section>
+      </div>
+      <div class="thread-list" id="threadList">
+        <div class="empty-state"><div class="icon">🧵</div>Loading threads…</div>
+      </div>
     </div>
 
-    <script>
-      const apiInput = document.getElementById('api');
-      const threadsEl = document.getElementById('threads');
-      const detailEl = document.getElementById('detail');
-      const repoSel = document.getElementById('repo');
-      const branchSel = document.getElementById('branch');
-      const searchInput = document.getElementById('search');
-      const KEY = 'cloudmem_api_base';
+    <!-- Center: Detail -->
+    <div class="panel-center" id="center">
+      <div class="empty-state" style="padding-top:100px">
+        <div class="icon">📋</div>
+        Select a thread to view details
+      </div>
+    </div>
 
-      const statCount = document.getElementById('statCount');
-      const statTokens = document.getElementById('statTokens');
-      const statCost = document.getElementById('statCost');
-      const statLast = document.getElementById('statLast');
-      const kpiSessions = document.getElementById('kpiSessions');
-      const kpiInput = document.getElementById('kpiInput');
-      const kpiOutput = document.getElementById('kpiOutput');
+    <!-- Right: Sidebar -->
+    <div class="panel-right" id="sidebar">
+      <div class="empty-state"><div class="icon">📌</div>No thread selected</div>
+    </div>
+  </div>
 
-      const inferred = (location.hostname === 'threads.littlescene.com') ? 'https://api.littlescene.com' : '';
-      const defaultApi = (window.CLOUDMEM_API_BASE || inferred || '').trim();
-      apiInput.value = localStorage.getItem(KEY) || defaultApi;
+<script>
+const KEY = 'cloudmem_api_base';
+const apiInput = document.getElementById('apiInput');
+const inferred = location.hostname === 'threads.littlescene.com' ? 'https://api.littlescene.com' : '';
+apiInput.value = localStorage.getItem(KEY) || window.CLOUDMEM_API_BASE || inferred || '';
 
-      let allRows = [];
-      let filtered = [];
-      let activeId = null;
+let allRows = [], filtered = [], activeId = null;
 
-      function base() {
-        return (apiInput.value || '').trim().replace(/\/$/, '');
-      }
+// ── Helpers ──
+function n(x) { return Number(x || 0); }
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function fmtNum(v) {
+  v = n(v);
+  if (v >= 1e6) return (v/1e6).toFixed(1) + 'M';
+  if (v >= 1e3) return (v/1e3).toFixed(1) + 'k';
+  return String(v);
+}
+function fmtDur(sec) {
+  sec = n(sec);
+  if (sec < 60) return sec + 's';
+  if (sec < 3600) return Math.floor(sec/60) + 'm ' + (sec%60) + 's';
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60);
+  return h + 'h ' + m + 'm';
+}
+function timeAgo(iso) {
+  if (!iso) return '-';
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
+  return new Date(iso).toLocaleDateString();
+}
+function base() { return (apiInput.value || '').trim().replace(/\/$/,''); }
 
-      function n(x) { return Number(x || 0); }
-      function fmt(num) { return new Intl.NumberFormat('en-US').format(n(num)); }
+// ── Config Panel ──
+document.getElementById('settingsBtn').onclick = () => {
+  document.getElementById('configPanel').classList.toggle('open');
+};
+document.getElementById('saveBtn').onclick = () => {
+  localStorage.setItem(KEY, base());
+  document.getElementById('configPanel').classList.remove('open');
+  loadThreads();
+};
+document.getElementById('refreshBtn').onclick = () => {
+  document.getElementById('configPanel').classList.remove('open');
+  loadThreads();
+};
 
-      function setTopStats(rows) {
-        const inTok = rows.reduce((s, r) => s + n(r.token_input), 0);
-        const outTok = rows.reduce((s, r) => s + n(r.token_output), 0);
-        const cost = rows.reduce((s, r) => s + n(r.cost_usd), 0);
-        statCount.textContent = `会话：${rows.length}`;
-        statTokens.textContent = `Tokens：${fmt(inTok + outTok)}`;
-        statCost.textContent = `成本：$${cost.toFixed(4)}`;
-        statLast.textContent = `最近结束：${rows[0]?.ended_at || '-'}`;
-      }
+// ── Summary Stats ──
+function setSummary(rows) {
+  const inT = rows.reduce((s,r) => s + n(r.token_input), 0);
+  const outT = rows.reduce((s,r) => s + n(r.token_output), 0);
+  const cost = rows.reduce((s,r) => s + n(r.cost_usd), 0);
+  document.getElementById('sTot').textContent = rows.length;
+  document.getElementById('sTok').textContent = fmtNum(inT + outT);
+  document.getElementById('sCost').textContent = '$' + cost.toFixed(2);
+  document.getElementById('sLast').textContent = timeAgo(rows[0]?.ended_at);
+}
 
-      function fillFilterOptions() {
-        const repos = [...new Set(allRows.map(r => r.repo).filter(Boolean))].sort();
-        const branches = [...new Set(allRows.map(r => r.branch).filter(Boolean))].sort();
+// ── Filters ──
+function fillFilters() {
+  const repos = [...new Set(allRows.map(r=>r.repo).filter(Boolean))].sort();
+  const branches = [...new Set(allRows.map(r=>r.branch).filter(Boolean))].sort();
+  const rs = document.getElementById('repoFilter'), bs = document.getElementById('branchFilter');
+  const kR = rs.value, kB = bs.value;
+  rs.innerHTML = '<option value="">All repos</option>' + repos.map(v=>`<option>${esc(v)}</option>`).join('');
+  bs.innerHTML = '<option value="">All branches</option>' + branches.map(v=>`<option>${esc(v)}</option>`).join('');
+  rs.value = repos.includes(kR)?kR:''; bs.value = branches.includes(kB)?kB:'';
+}
+function applyFilter() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const repo = document.getElementById('repoFilter').value;
+  const branch = document.getElementById('branchFilter').value;
+  filtered = allRows.filter(r => {
+    if (repo && r.repo !== repo) return false;
+    if (branch && r.branch !== branch) return false;
+    if (!q) return true;
+    return `${r.thread_id||''} ${r.repo||''} ${r.branch||''}`.toLowerCase().includes(q);
+  });
+  renderList();
+}
+document.getElementById('search').addEventListener('input', applyFilter);
+document.getElementById('repoFilter').addEventListener('change', applyFilter);
+document.getElementById('branchFilter').addEventListener('change', applyFilter);
 
-        const keepRepo = repoSel.value;
-        const keepBranch = branchSel.value;
+// ── Thread List ──
+function renderList() {
+  const el = document.getElementById('threadList');
+  if (!filtered.length) { el.innerHTML = '<div class="empty-state"><div class="icon">📭</div>No threads found</div>'; return; }
+  el.innerHTML = filtered.map(r => {
+    const isActive = activeId === r.thread_id;
+    const statusCls = (r.status === 'completed') ? 'badge-ok' : (r.status === 'failed') ? 'badge-err' : 'badge-mode';
+    return `<div class="thread-item ${isActive?'active':''}" data-id="${esc(r.thread_id)}">
+      <div class="thread-id">${esc(r.thread_id)}</div>
+      <div class="thread-meta">${esc(r.repo||'-')} · ${esc(r.branch||'-')} · ${timeAgo(r.ended_at)}</div>
+      <div class="thread-badges">
+        <span class="badge ${statusCls}">${esc(r.status||'unknown')}</span>
+        ${r.mode ? `<span class="badge badge-mode">${esc(r.mode)}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('.thread-item').forEach(el => {
+    el.addEventListener('click', () => selectThread(el.dataset.id));
+  });
+}
 
-        repoSel.innerHTML = '<option value="">全部仓库</option>' + repos.map(v => `<option>${v}</option>`).join('');
-        branchSel.innerHTML = '<option value="">全部分支</option>' + branches.map(v => `<option>${v}</option>`).join('');
+// ── Select Thread ──
+async function selectThread(id) {
+  activeId = id;
+  renderList();
+  const b = base();
+  try {
+    const res = await fetch(`${b}/v1/thread/${encodeURIComponent(id)}`);
+    const data = await res.json();
+    if (data.thread) {
+      renderCenter(data.thread);
+      renderSidebar(data.thread);
+    }
+  } catch(e) {
+    document.getElementById('center').innerHTML = `<div class="empty-state"><div class="icon">❌</div>Failed to load: ${esc(e.message)}</div>`;
+  }
+}
 
-        repoSel.value = repos.includes(keepRepo) ? keepRepo : '';
-        branchSel.value = branches.includes(keepBranch) ? keepBranch : '';
-      }
+// ── Center Detail ──
+function renderCenter(t) {
+  const plus = n(t.lines_added), minus = n(t.lines_deleted), mod = n(t.lines_modified);
+  const pct = n(t.context_used_pct).toFixed(1);
+  const tokIn = n(t.token_input), tokOut = n(t.token_output);
 
-      function applyFilter() {
-        const q = searchInput.value.trim().toLowerCase();
-        const repo = repoSel.value;
-        const branch = branchSel.value;
+  document.getElementById('center').innerHTML = `
+    <div class="detail-title">${esc(t.repo || t.thread_id)}</div>
+    <div class="detail-subtitle">
+      ${esc(t.repo||'-')} · ${esc(t.branch||'-')} · ${timeAgo(t.ended_at)}
+    </div>
 
-        filtered = allRows.filter(r => {
-          if (repo && r.repo !== repo) return false;
-          if (branch && r.branch !== branch) return false;
-          if (!q) return true;
-          return `${r.thread_id||''} ${r.repo||''} ${r.branch||''}`.toLowerCase().includes(q);
-        });
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Duration</div>
+        <div class="stat-value">${fmtDur(t.duration_sec)}</div>
+        <div class="stat-sub">${esc(t.created_at?.slice(0,16)||'')} → ${esc(t.ended_at?.slice(11,16)||'')}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Prompts</div>
+        <div class="stat-value">${n(t.prompt_count)}</div>
+        <div class="stat-sub">${esc(t.interface||'CLI')}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Cost</div>
+        <div class="stat-value">$${n(t.cost_usd).toFixed(2)}</div>
+        <div class="stat-sub">${t.cost_is_estimated ? 'estimated' : 'actual'}</div>
+      </div>
+    </div>
 
-        renderKpis(filtered);
-        renderChart(filtered);
-        renderList(filtered);
-      }
-
-      function renderKpis(rows) {
-        const inTok = rows.reduce((s, r) => s + n(r.token_input), 0);
-        const outTok = rows.reduce((s, r) => s + n(r.token_output), 0);
-        kpiSessions.textContent = fmt(rows.length);
-        kpiInput.textContent = fmt(inTok);
-        kpiOutput.textContent = fmt(outTok);
-      }
-
-      function renderChart(rows) {
-        const c = document.getElementById('chart');
-        const ctx = c.getContext('2d');
-        const W = c.width, H = c.height;
-        ctx.clearRect(0, 0, W, H);
-
-        const days = [];
-        const map = new Map();
-        const now = new Date();
-        for (let i = 6; i >= 0; i--) {
-          const d = new Date(now);
-          d.setDate(now.getDate() - i);
-          const k = d.toISOString().slice(0, 10);
-          days.push(k);
-          map.set(k, 0);
-        }
-        rows.forEach(r => {
-          const k = String(r.ended_at || '').slice(0, 10);
-          if (map.has(k)) map.set(k, map.get(k) + 1);
-        });
-
-        const vals = days.map(k => map.get(k));
-        const maxV = Math.max(1, ...vals);
-
-        ctx.strokeStyle = '#ffffff22';
-        for (let i = 0; i < 4; i++) {
-          const y = 10 + (H - 24) * (i / 3);
-          ctx.beginPath();
-          ctx.moveTo(8, y);
-          ctx.lineTo(W - 8, y);
-          ctx.stroke();
-        }
-
-        const xAt = i => 12 + i * ((W - 24) / (days.length - 1));
-        const yAt = v => 10 + (H - 24) * (1 - v / maxV);
-
-        ctx.strokeStyle = '#73a3ff';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        vals.forEach((v, i) => {
-          const x = xAt(i), y = yAt(v);
-          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        });
-        ctx.stroke();
-
-        vals.forEach((v, i) => {
-          const x = xAt(i), y = yAt(v);
-          ctx.fillStyle = '#56d39b';
-          ctx.beginPath();
-          ctx.arc(x, y, 3.2, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#a8b3d1';
-          ctx.font = '10px sans-serif';
-          ctx.fillText(String(v), x - 3, y - 8);
-          ctx.fillText(days[i].slice(5), x - 12, H - 4);
-        });
-      }
-
-      function renderList(rows) {
-        if (!rows.length) {
-          threadsEl.innerHTML = '暂无数据';
-          detailEl.textContent = '暂无可展示详情';
-          return;
-        }
-        threadsEl.innerHTML = rows.map(r => `
-          <div class="item ${activeId===r.thread_id?'active':''}" data-id="${r.thread_id}">
-            <div class="id">${r.thread_id}</div>
-            <div class="meta">${r.repo || '-'} · ${r.branch || '-'} · ${r.mode || '-'} · ${r.ended_at || '-'}</div>
+    <div class="stat-grid" style="margin-top:12px">
+      <div class="stat-card">
+        <div class="stat-label">Context Used</div>
+        <div class="stat-value">${pct}%</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100, n(t.context_used_pct))}%"></div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Lines Changed</div>
+        <div class="stat-value">
+          <div class="diff-line">
+            <span class="diff-add">+${fmtNum(plus)}</span>
+            <span class="diff-del">-${fmtNum(minus)}</span>
+            <span class="diff-mod">~${fmtNum(mod)}</span>
           </div>
-        `).join('');
+        </div>
+        <div class="stat-sub">${n(t.files_changed)} files</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tokens</div>
+        <div class="stat-value">${fmtNum(tokIn + tokOut)}</div>
+        <div class="stat-sub">in: ${fmtNum(tokIn)} · out: ${fmtNum(tokOut)}</div>
+      </div>
+    </div>
 
-        for (const el of threadsEl.querySelectorAll('.item')) {
-          el.addEventListener('click', () => {
-            activeId = el.dataset.id;
-            loadDetail(activeId).then(() => renderList(rows));
-          });
-        }
+    <div class="chart-section">
+      <div class="chart-title">Sessions · Last 7 Days</div>
+      <canvas id="chart" width="700" height="130"></canvas>
+    </div>
+  `;
+  renderChart(filtered);
+}
 
-        if (!activeId || !rows.some(r => r.thread_id === activeId)) {
-          activeId = rows[0].thread_id;
-          loadDetail(activeId).then(() => renderList(rows));
-        }
-      }
+// ── Chart ──
+function renderChart(rows) {
+  const c = document.getElementById('chart');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  ctx.clearRect(0,0,W,H);
 
-      async function loadThreads() {
-        threadsEl.innerHTML = '加载中...';
-        const b = base();
-        if (!b) {
-          threadsEl.innerHTML = '请先填写 API 基地址';
-          return;
-        }
-        try {
-          const res = await fetch(`${b}/v1/threads?limit=200`);
-          const data = await res.json();
-          allRows = (data.threads || []).sort((a,b)=>String(b.ended_at||'').localeCompare(String(a.ended_at||'')));
-          setTopStats(allRows);
-          fillFilterOptions();
-          applyFilter();
-        } catch (e) {
-          threadsEl.innerHTML = `加载失败：${e.message}`;
-        }
-      }
+  const days = [], map = new Map(), now = new Date();
+  for (let i=6; i>=0; i--) {
+    const d = new Date(now); d.setDate(now.getDate()-i);
+    const k = d.toISOString().slice(0,10); days.push(k); map.set(k,0);
+  }
+  rows.forEach(r => { const k = String(r.ended_at||'').slice(0,10); if(map.has(k)) map.set(k, map.get(k)+1); });
+  const vals = days.map(k=>map.get(k)), maxV = Math.max(1,...vals);
 
-      async function loadDetail(threadId) {
-        const b = base();
-        try {
-          const res = await fetch(`${b}/v1/thread/${encodeURIComponent(threadId)}`);
-          const data = await res.json();
-          detailEl.textContent = JSON.stringify(data.thread || data, null, 2);
-        } catch (e) {
-          detailEl.textContent = `加载详情失败：${e.message}`;
-        }
-      }
+  // Grid
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.lineWidth = 1;
+  for (let i=0; i<4; i++) {
+    const y = 12 + (H-30)*(i/3);
+    ctx.beginPath(); ctx.moveTo(8,y); ctx.lineTo(W-8,y); ctx.stroke();
+  }
 
-      document.getElementById('save').addEventListener('click', () => {
-        localStorage.setItem(KEY, base());
-        loadThreads();
-      });
-      document.getElementById('load').addEventListener('click', loadThreads);
-      repoSel.addEventListener('change', applyFilter);
-      branchSel.addEventListener('change', applyFilter);
-      searchInput.addEventListener('input', applyFilter);
+  const xAt = i => 20 + i*((W-40)/(days.length-1));
+  const yAt = v => 12 + (H-30)*(1-v/maxV);
 
-      if (base()) loadThreads();
-    </script>
-  </body>
+  // Area fill
+  ctx.fillStyle = 'rgba(99,102,241,0.08)';
+  ctx.beginPath();
+  vals.forEach((v,i) => { const x=xAt(i),y=yAt(v); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+  ctx.lineTo(xAt(vals.length-1), H-18); ctx.lineTo(xAt(0), H-18); ctx.closePath(); ctx.fill();
+
+  // Line
+  ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  vals.forEach((v,i) => { const x=xAt(i),y=yAt(v); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+  ctx.stroke();
+
+  // Dots + labels
+  vals.forEach((v,i) => {
+    const x=xAt(i), y=yAt(v);
+    ctx.fillStyle = '#6366f1';
+    ctx.beginPath(); ctx.arc(x,y,3.5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#6b7280'; ctx.font = '11px Inter, sans-serif';
+    ctx.fillText(String(v), x-3, y-10);
+    ctx.fillText(days[i].slice(5), x-14, H-4);
+  });
+}
+
+// ── Right Sidebar ──
+function renderSidebar(t) {
+  const plus = n(t.lines_added), minus = n(t.lines_deleted), mod = n(t.lines_modified);
+  document.getElementById('sidebar').innerHTML = `
+    <div class="sidebar-section">
+      <div class="sidebar-title">Thread</div>
+      <div class="sidebar-row"><span class="sidebar-icon">📅</span><span class="sidebar-value">${timeAgo(t.ended_at)}</span></div>
+      <div class="sidebar-row"><span class="sidebar-icon">📁</span><span class="sidebar-value"><a href="https://github.com/${esc(t.repo)}" target="_blank">${esc(t.repo||'-')}</a></span></div>
+      <div class="sidebar-row"><span class="sidebar-icon">🔀</span><span class="sidebar-value">${esc(t.branch||'-')}</span></div>
+      <div class="sidebar-row"><span class="sidebar-icon">🧠</span><span class="sidebar-value">${esc(t.mode||'-')}</span></div>
+      <div class="sidebar-row"><span class="sidebar-icon">💰</span><span class="sidebar-value">$${n(t.cost_usd).toFixed(2)}${t.cost_is_estimated?' (est.)':''}</span></div>
+      <div class="sidebar-row"><span class="sidebar-icon">💻</span><span class="sidebar-value">${esc(t.interface||'CLI')}</span></div>
+      <div class="sidebar-row"><span class="sidebar-icon">💬</span><span class="sidebar-value">${n(t.prompt_count)} prompts</span></div>
+      <div class="sidebar-row"><span class="sidebar-icon">📊</span><span class="sidebar-value">${n(t.context_used_pct).toFixed(1)}% of context</span></div>
+      <div class="sidebar-row"><span class="sidebar-icon">⏱️</span><span class="sidebar-value">${fmtDur(t.duration_sec)}</span></div>
+      <div class="sidebar-row"><span class="sidebar-icon">📝</span><span class="sidebar-value"><span class="diff-add">+${fmtNum(plus)}</span> <span class="diff-del">-${fmtNum(minus)}</span> <span class="diff-mod">~${fmtNum(mod)}</span> lines</span></div>
+      ${n(t.oracle_used) ? '<div class="sidebar-row"><span class="sidebar-icon">🔮</span><span class="sidebar-value">Uses Oracle</span></div>' : ''}
+      <div class="sidebar-row"><span class="sidebar-icon">☁️</span><span class="sidebar-value">${esc(t.sync_status||t.remote_status||'-')}</span></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Open in CLI</div>
+      <div class="cli-box">
+        <span>cloudmem thread show ${esc(t.thread_id)}</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('cloudmem thread show ${esc(t.thread_id)}');this.textContent='✓';setTimeout(()=>this.textContent='📋',1200)">📋</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Thread ID</div>
+      <div style="font-family:ui-monospace,monospace;font-size:11px;color:var(--text-secondary);word-break:break-all">${esc(t.thread_id)}</div>
+    </div>
+  `;
+}
+
+// ── Load ──
+async function loadThreads() {
+  const el = document.getElementById('threadList');
+  const b = base();
+  if (!b) { el.innerHTML = '<div class="empty-state"><div class="icon">⚙️</div>Set API URL first</div>'; return; }
+  el.innerHTML = '<div class="empty-state"><div class="icon">⏳</div>Loading…</div>';
+  try {
+    const res = await fetch(`${b}/v1/threads?limit=200`);
+    const data = await res.json();
+    allRows = (data.threads||[]).sort((a,b) => String(b.ended_at||'').localeCompare(String(a.ended_at||'')));
+    setSummary(allRows);
+    fillFilters();
+    filtered = [...allRows];
+    applyFilter();
+    if (filtered.length && !activeId) selectThread(filtered[0].thread_id);
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">❌</div>${esc(e.message)}</div>`;
+  }
+}
+
+if (base()) loadThreads();
+</script>
+</body>
 </html>
