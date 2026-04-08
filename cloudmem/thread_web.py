@@ -17,167 +17,158 @@ def _ui_html() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CloudMem u00b7 Threads</title>
   <style>
-    :root {
-      --bg: #f8f9fb;
-      --surface: #ffffff;
-      --border: #e5e7eb;
-      --border-light: #f0f1f3;
-      --text: #111827;
-      --text-s: #6b7280;
-      --text-m: #9ca3af;
-      --brand: #6366f1;
-      --brand-light: #eef2ff;
-      --green: #16a34a;
-      --red: #dc2626;
-      --amber: #ca8a04;
-      --green-bg: #f0fdf4;
-      --red-bg: #fef2f2;
-      --radius: 12px;
-      --shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
-    .mono { font-family: ui-monospace,SFMono-Regular,Menlo,monospace; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#fff;color:#111827;line-height:1.6}
+    a{color:#6366f1;text-decoration:none} a:hover{text-decoration:underline}
+    .nav{height:52px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;padding:0 24px;position:sticky;top:0;z-index:100;background:#fff}
+    .logo{font-weight:800;font-size:18px;color:#6366f1;letter-spacing:-.4px;cursor:pointer} .logo span{color:#111827}
+    .nav-link{margin-left:24px;font-size:14px;color:#6b7280}
 
-    .nav { height:52px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 20px; position:sticky; top:0; z-index:100; }
-    .nav-logo { font-weight:700; font-size:16px; color:var(--brand); letter-spacing:-0.3px; }
-    .nav-logo span { color:var(--text); }
-    .nav-link { margin-left:20px; font-size:14px; color:var(--text-s); text-decoration:none; }
+    /* List */
+    .list-view{max-width:860px;margin:0 auto;padding:32px 24px}
+    .list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+    .list-header h1{font-size:22px;font-weight:700}
+    .list-header .count{font-size:14px;color:#6b7280}
+    .list-filters{margin-bottom:16px}
+    .list-filters input{width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:7px 12px;font:inherit;font-size:13px;outline:none}
+    .list-filters input:focus{border-color:#6366f1}
+    .trow{display:grid;grid-template-columns:1fr 150px 100px 80px 90px;gap:12px;padding:12px 16px;border-bottom:1px solid #f0f1f3;align-items:center;cursor:pointer;border-radius:10px;transition:background .12s}
+    .trow:hover{background:#f9fafb}
+    .trow-head{font-size:12px;font-weight:600;color:#9ca3af;cursor:default;border-bottom:2px solid #e5e7eb}
+    .trow-head:hover{background:transparent}
+    .tid{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tmeta{font-size:12px;color:#6b7280}
+    .pill{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:600;display:inline-block}
+    .pill-ok{background:#f0fdf4;color:#16a34a}
+    .pill-err{background:#fef2f2;color:#dc2626}
+    .pill-mode{background:#eef2ff;color:#6366f1}
 
-    .layout { display:grid; grid-template-columns:320px 1fr 280px; height:calc(100vh - 52px); }
-
-    .panel-left { border-right:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; overflow:hidden; }
-    .filters { padding:12px; border-bottom:1px solid var(--border-light); }
-    .filters input { width:100%; border:1px solid var(--border); border-radius:8px; padding:7px 10px; font:inherit; font-size:13px; outline:none; }
-    .filters input:focus { border-color:var(--brand); }
-    .thread-list { flex:1; overflow-y:auto; }
-    .thread-item { padding:12px 14px; border-bottom:1px solid var(--border-light); cursor:pointer; border-left:3px solid transparent; transition:all .15s; }
-    .thread-item:hover { background:#f9fafb; }
-    .thread-item.active { background:var(--brand-light); border-left-color:var(--brand); }
-    .thread-id { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .thread-meta { font-size:12px; color:var(--text-m); margin-top:3px; }
-    .thread-badges { display:flex; gap:5px; margin-top:5px; }
-    .badge { font-size:11px; padding:1px 7px; border-radius:999px; font-weight:600; }
-    .badge-ok { background:var(--green-bg); color:var(--green); }
-    .badge-err { background:var(--red-bg); color:var(--red); }
-    .badge-mode { background:#f0f0ff; color:var(--brand); }
-
-    .panel-center { overflow-y:auto; padding:24px 28px; }
-    .detail-title { font-size:22px; font-weight:700; letter-spacing:-0.3px; }
-    .detail-sub { font-size:13px; color:var(--text-s); margin-top:4px; }
-    .stat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:20px; }
-    .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; box-shadow:var(--shadow); }
-    .stat-label { font-size:12px; color:var(--text-m); font-weight:500; }
-    .stat-value { font-size:20px; font-weight:700; margin-top:4px; }
-    .stat-sub { font-size:12px; color:var(--text-m); margin-top:2px; }
-    .diff-add { color:var(--green); } .diff-del { color:var(--red); } .diff-mod { color:var(--amber); }
-    .diff-line { display:flex; gap:10px; font-size:14px; font-weight:600; font-family:ui-monospace,monospace; }
-    .progress-bar { height:6px; background:var(--border); border-radius:999px; overflow:hidden; margin-top:6px; }
-    .progress-fill { height:100%; background:var(--brand); border-radius:999px; }
-
-    .events-section { margin-top:24px; }
-    .ev-title { font-size:14px; font-weight:600; margin-bottom:12px; }
-    .ev-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px; margin-bottom:8px; box-shadow:var(--shadow); }
-    .ev-time { font-size:11px; color:var(--text-m); margin-bottom:6px; }
-    .ev-body { font-family:ui-monospace,monospace; font-size:12px; white-space:pre-wrap; word-break:break-all; color:#334155; max-height:200px; overflow:auto; }
-
-    .panel-right { border-left:1px solid var(--border); background:var(--surface); overflow-y:auto; padding:20px; }
-    .sb-title { font-size:13px; font-weight:700; margin-bottom:12px; }
-    .sb-row { display:flex; align-items:flex-start; gap:8px; margin-bottom:10px; font-size:13px; }
-    .sb-icon { width:18px; text-align:center; font-size:14px; flex-shrink:0; }
-    .sb-val { color:var(--text); font-weight:500; word-break:break-all; }
-    .cli-box { background:#f4f4f7; border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-family:ui-monospace,monospace; font-size:12px; color:var(--text-s); margin-top:12px; }
-    .empty { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text-m); font-size:14px; gap:8px; }
-    .empty .icon { font-size:32px; }
-
-    @media(max-width:1024px){ .layout{grid-template-columns:280px 1fr;} .panel-right{display:none;} }
-    @media(max-width:768px){ .layout{grid-template-columns:1fr;height:auto;} .panel-left{max-height:40vh;} }
+    /* Detail */
+    .detail-view{display:none}
+    .detail-layout{display:grid;grid-template-columns:1fr 300px;min-height:calc(100vh - 52px)}
+    .center{max-width:800px;padding:40px 32px 80px;margin:0 auto}
+    .back{font-size:13px;color:#6b7280;display:inline-flex;align-items:center;gap:4px;margin-bottom:20px;cursor:pointer} .back:hover{color:#111}
+    .d-title{font-size:26px;font-weight:700;letter-spacing:-.4px;text-align:center}
+    .d-author{text-align:center;margin-top:8px;font-size:14px;color:#6b7280}
+    .stat-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;padding:16px;background:#f9fafb;border-radius:12px;border:1px solid #e5e7eb}
+    .stat-item{text-align:center;flex:1;min-width:80px} .stat-item .sv{font-size:18px;font-weight:700} .stat-item .sl{font-size:11px;color:#9ca3af;margin-top:2px}
+    .timeline{margin-top:32px}
+    .t-msg{display:flex;gap:14px;margin-bottom:24px}
+    .t-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;margin-top:2px;background:#e0e7ff}
+    .t-body{flex:1;min-width:0} .t-role{font-size:12px;font-weight:600;color:#6b7280;margin-bottom:4px} .t-text{font-size:14px;color:#374151;line-height:1.7}
+    .t-tool{background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;overflow:hidden}
+    .t-tool-head{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;font-size:13px} .t-tool-head:hover{background:#f3f4f6}
+    .t-tool-name{font-weight:600;color:#374151} .t-tool-desc{color:#9ca3af;font-size:12px}
+    .t-tool-chevron{margin-left:auto;color:#9ca3af;transition:transform .2s} .t-tool-chevron.open{transform:rotate(180deg)}
+    .t-tool-body{display:none;border-top:1px solid #e5e7eb;padding:12px 14px;background:#fafbfc} .t-tool-body.open{display:block}
+    .t-tool-body pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;color:#334155;line-height:1.6}
+    .ev-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;overflow:hidden}
+    .ev-head{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;font-size:13px} .ev-head:hover{background:#f3f4f6}
+    .ev-time{font-size:12px;color:#9ca3af} .ev-label{font-weight:600;color:#374151}
+    .ev-chevron{margin-left:auto;color:#9ca3af;transition:transform .2s} .ev-chevron.open{transform:rotate(180deg)}
+    .ev-body{display:none;border-top:1px solid #e5e7eb;padding:12px 14px;background:#fafbfc} .ev-body.open{display:block}
+    .ev-body pre{font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;color:#334155;line-height:1.6}
+    .diff-a{color:#16a34a;font-weight:600} .diff-d{color:#dc2626;font-weight:600} .diff-m{color:#ca8a04;font-weight:600}
+    .sidebar{border-left:1px solid #e5e7eb;padding:24px 20px;background:#fff;position:sticky;top:52px;height:calc(100vh - 52px);overflow-y:auto}
+    .sb-badge{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#6b7280;border:1px solid #e5e7eb;border-radius:999px;padding:3px 10px;margin-bottom:16px}
+    .sb-title{font-size:14px;font-weight:700;margin-bottom:14px}
+    .sb-row{display:flex;gap:10px;margin-bottom:11px;font-size:13px;line-height:1.4}
+    .sb-icon{width:18px;text-align:center;flex-shrink:0;font-size:14px} .sb-val{color:#111827;font-weight:500;word-break:break-all}
+    .sb-section{margin-top:20px;padding-top:16px;border-top:1px solid #f0f1f3}
+    .sb-label-title{font-size:13px;font-weight:700;margin-bottom:8px}
+    .cli-box{background:#f4f4f7;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-family:ui-monospace,monospace;font-size:12px;color:#6b7280}
+    .empty{text-align:center;padding:60px 20px;color:#9ca3af} .empty .e-icon{font-size:40px;margin-bottom:12px}
+    @media(max-width:900px){.detail-layout{grid-template-columns:1fr} .sidebar{display:none}}
   </style>
 </head>
 <body>
-  <nav class="nav">
-    <div class="nav-logo">u2601ufe0f Cloud<span>Mem</span></div>
-    <a class="nav-link" href="#">ud83euddf5 Threads</a>
-  </nav>
+<nav class="nav"><div class="logo" onclick="showList()">Cloud<span>Mem</span></div><a class="nav-link" href="#" onclick="showList();return false">ud83euddf5 Threads</a></nav>
 
-  <div class="layout">
-    <div class="panel-left">
-      <div class="filters"><input id="search" placeholder="Search threadsu2026" /></div>
-      <div class="thread-list" id="threadList"><div class="empty"><div class="icon">ud83euddf5</div>Loadingu2026</div></div>
-    </div>
-    <div class="panel-center" id="center"><div class="empty" style="padding-top:100px"><div class="icon">ud83dudccb</div>Select a thread</div></div>
-    <div class="panel-right" id="sidebar"><div class="empty"><div class="icon">ud83dudccc</div>No thread selected</div></div>
+<div id="listView" class="list-view">
+  <div class="list-header"><h1>Threads</h1><div class="count" id="listCount"></div></div>
+  <div class="list-filters"><input id="search" placeholder="Search thread, repo, branchu2026" /></div>
+  <div id="listBody"><div class="empty"><div class="e-icon">u23f3</div>Loadingu2026</div></div>
+</div>
+
+<div id="detailView" class="detail-view">
+  <div class="detail-layout">
+    <div><div class="center" id="centerCol"></div></div>
+    <div class="sidebar" id="sidebarCol"></div>
   </div>
+</div>
 
 <script>
-let allRows=[], activeId=null;
-function n(x){return Number(x||0);}
-function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function fmtNum(v){v=n(v);if(v>=1e6)return(v/1e6).toFixed(1)+'M';if(v>=1e3)return(v/1e3).toFixed(1)+'k';return String(v);}
-function fmtDur(s){s=n(s);if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+s%60+'s';return Math.floor(s/3600)+'h '+Math.floor(s%3600/60)+'m';}
-function timeAgo(iso){if(!iso)return'-';const d=(Date.now()-new Date(iso).getTime())/1e3;if(d<60)return'now';if(d<3600)return Math.floor(d/60)+'m ago';if(d<86400)return Math.floor(d/3600)+'h ago';if(d<604800)return Math.floor(d/86400)+'d ago';return new Date(iso).toLocaleDateString();}
-
-async function j(url){const r=await fetch(url);return await r.json();}
+let allRows=[],activeId=null;
+function n(x){return Number(x||0)}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function fN(v){v=n(v);if(v>=1e6)return(v/1e6).toFixed(1)+'M';if(v>=1e3)return(v/1e3).toFixed(1)+'k';return String(v)}
+function fD(s){s=n(s);if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+s%60+'s';const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h+'h '+m+'m'}
+function ago(iso){if(!iso)return'-';const d=(Date.now()-new Date(iso).getTime())/1e3;if(d<60)return'just now';if(d<3600)return Math.floor(d/60)+'m ago';if(d<86400)return Math.floor(d/3600)+'h ago';if(d<604800)return Math.floor(d/86400)+'d ago';return new Date(iso).toLocaleDateString()}
+function showList(){document.getElementById('listView').style.display='';document.getElementById('detailView').style.display='none'}
+function showDetail(){document.getElementById('listView').style.display='none';document.getElementById('detailView').style.display=''}
+async function j(url){const r=await fetch(url);return await r.json()}
 
 function renderList(){
   const q=document.getElementById('search').value.trim().toLowerCase();
   const rows=q?allRows.filter(r=>`${r.thread_id||''} ${r.repo||''} ${r.branch||''}`.toLowerCase().includes(q)):allRows;
-  const el=document.getElementById('threadList');
-  if(!rows.length){el.innerHTML='<div class="empty"><div class="icon">ud83dudced</div>No threads</div>';return;}
-  el.innerHTML=rows.map(r=>{
-    const cls=activeId===r.thread_id?'active':'';
-    const sc=r.status==='completed'?'badge-ok':r.status==='failed'?'badge-err':'badge-mode';
-    return `<div class="thread-item ${cls}" data-id="${esc(r.thread_id)}">
-      <div class="thread-id">${esc(r.thread_id)}</div>
-      <div class="thread-meta">${esc(r.repo||'-')} \u00b7 ${esc(r.branch||'-')} \u00b7 ${timeAgo(r.ended_at)}</div>
-      <div class="thread-badges"><span class="badge ${sc}">${esc(r.status||'?')}</span>${r.mode?`<span class="badge badge-mode">${esc(r.mode)}</span>`:''}</div>
-    </div>`;}).join('');
-  el.querySelectorAll('.thread-item').forEach(n=>n.addEventListener('click',()=>openThread(n.dataset.id)));
+  document.getElementById('listCount').textContent=`${rows.length} threads`;
+  const el=document.getElementById('listBody');
+  if(!rows.length){el.innerHTML='<div class="empty"><div class="e-icon">ud83dudced</div>No threads</div>';return;}
+  el.innerHTML='<div class="trow trow-head"><span>Thread</span><span>Repo</span><span>Status</span><span>Diff</span><span>Time</span></div>'+rows.map(r=>{
+    const sc=r.status==='completed'?'pill-ok':r.status==='failed'?'pill-err':'pill-mode';
+    const plus=n(r.lines_added),minus=n(r.lines_deleted);
+    return`<div class="trow" data-id="${esc(r.thread_id)}"><div><div class="tid">${esc(r.thread_id)}</div><div class="tmeta">${esc(r.branch||'-')}</div></div><div class="tmeta">${esc(r.repo||'-')}</div><div><span class="pill ${sc}">${esc(r.status||'?')}</span></div><div class="tmeta"><span class="diff-a">+${fN(plus)}</span> <span class="diff-d">-${fN(minus)}</span></div><div class="tmeta">${ago(r.ended_at)}</div></div>`;}).join('');
+  el.querySelectorAll('.trow:not(.trow-head)').forEach(n=>n.addEventListener('click',()=>openThread(n.dataset.id)));
 }
 
 async function openThread(id){
-  activeId=id; renderList();
+  activeId=id;showDetail();
   const data=await j('/api/thread/'+encodeURIComponent(id));
   if(!data.thread)return;
-  const t=data.thread;
-  const plus=n(t.lines_added),minus=n(t.lines_deleted),mod=n(t.lines_modified);
+  const t=data.thread,events=data.events||[];
+  const plus=n(t.lines_added),minus=n(t.lines_deleted),mod=n(t.lines_modified),tokIn=n(t.token_input),tokOut=n(t.token_output);
 
-  document.getElementById('center').innerHTML=`
-    <div class="detail-title">${esc(t.repo||t.thread_id)}</div>
-    <div class="detail-sub">${esc(t.repo||'-')} \u00b7 ${esc(t.branch||'-')} \u00b7 ${timeAgo(t.ended_at)}</div>
-    <div class="stat-grid">
-      <div class="stat-card"><div class="stat-label">Duration</div><div class="stat-value">${fmtDur(t.duration_sec)}</div></div>
-      <div class="stat-card"><div class="stat-label">Prompts</div><div class="stat-value">${n(t.prompt_count)}</div><div class="stat-sub">${esc(t.interface||'CLI')}</div></div>
-      <div class="stat-card"><div class="stat-label">Cost</div><div class="stat-value">$${n(t.cost_usd).toFixed(2)}</div><div class="stat-sub">${t.cost_is_estimated?'estimated':'actual'}</div></div>
+  let eventsHtml='';
+  if(events.length){
+    eventsHtml='<div style="margin-top:24px"><div style="font-size:14px;font-weight:600;margin-bottom:12px">Events</div>'+events.map((ev,i)=>{
+      const label=ev.event?.status||'event';
+      return`<div class="ev-card"><div class="ev-head" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.ev-chevron').classList.toggle('open')"><span style="font-size:14px">ud83dudd39</span><span class="ev-label">${esc(label)}</span><span class="ev-time">${esc(ev.saved_at||'')}</span><span class="ev-chevron">u25be</span></div><div class="ev-body"><pre>${esc(JSON.stringify(ev.event??ev,null,2))}</pre></div></div>`;}).join('')+'</div>';
+  }
+
+  document.getElementById('centerCol').innerHTML=`
+    <div class="back" onclick="showList()">u2190 Back to Threads</div>
+    <div class="d-title">${esc(t.repo||t.thread_id)}</div>
+    <div class="d-author">${esc(t.branch||'-')} \u00b7 ${esc(t.mode||'CLI')} \u00b7 ${ago(t.ended_at)}</div>
+    <div class="stat-row">
+      <div class="stat-item"><div class="sv">${fD(t.duration_sec)}</div><div class="sl">Duration</div></div>
+      <div class="stat-item"><div class="sv">${n(t.prompt_count)}</div><div class="sl">Prompts</div></div>
+      <div class="stat-item"><div class="sv">${fN(tokIn+tokOut)}</div><div class="sl">Tokens</div></div>
+      <div class="stat-item"><div class="sv">$${n(t.cost_usd).toFixed(2)}</div><div class="sl">Cost</div></div>
+      <div class="stat-item"><div class="sv">${n(t.context_used_pct).toFixed(0)}%</div><div class="sl">Context</div></div>
     </div>
-    <div class="stat-grid" style="margin-top:12px">
-      <div class="stat-card"><div class="stat-label">Context</div><div class="stat-value">${n(t.context_used_pct).toFixed(1)}%</div><div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,n(t.context_used_pct))}%"></div></div></div>
-      <div class="stat-card"><div class="stat-label">Lines Changed</div><div class="stat-value"><div class="diff-line"><span class="diff-add">+${fmtNum(plus)}</span><span class="diff-del">-${fmtNum(minus)}</span><span class="diff-mod">~${fmtNum(mod)}</span></div></div><div class="stat-sub">${n(t.files_changed)} files</div></div>
-      <div class="stat-card"><div class="stat-label">Tokens</div><div class="stat-value">${fmtNum(n(t.token_input)+n(t.token_output))}</div><div class="stat-sub">in: ${fmtNum(t.token_input)} \u00b7 out: ${fmtNum(t.token_output)}</div></div>
+    <div class="timeline">
+      ${plus||minus||mod?`<div class="t-tool"><div class="t-tool-head" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.t-tool-chevron').classList.toggle('open')"><span style="font-size:14px">ud83dudcdd</span><span class="t-tool-name">Code Changes</span><span class="t-tool-desc"><span class="diff-a">+${fN(plus)}</span> <span class="diff-d">-${fN(minus)}</span> <span class="diff-m">~${fN(mod)}</span> lines \u00b7 ${n(t.files_changed)} files</span><span class="t-tool-chevron">\u25be</span></div><div class="t-tool-body"><pre>Files changed: ${n(t.files_changed)}\nLines added:   ${plus}\nLines deleted: ${minus}\nLines modified:${mod}\nCommit: ${esc(t.commit_sha||'-')}</pre></div></div>`:''}
+      ${t.error_code?`<div class="t-msg"><div class="t-avatar" style="background:#fef2f2">u26a0ufe0f</div><div class="t-body"><div class="t-role">Error</div><div class="t-text" style="color:#dc2626">${esc(t.error_code)}: ${esc(t.error_detail||'')}</div></div></div>`:''}
+      <div class="t-msg"><div class="t-avatar">ud83eudd16</div><div class="t-body"><div class="t-role">Session Summary</div><div class="t-text">Worked for <strong>${fD(t.duration_sec)}</strong> on <strong>${esc(t.repo||'-')}</strong> (${esc(t.branch||'-')}). Processed <strong>${n(t.prompt_count)}</strong> prompts using <strong>${fN(tokIn+tokOut)}</strong> tokens. ${plus||minus?`Changed <strong>${n(t.files_changed)}</strong> files (<span class="diff-a">+${fN(plus)}</span> <span class="diff-d">-${fN(minus)}</span>).`:''} ${n(t.oracle_used)?'<strong>Oracle</strong> was consulted.':''} Ingest: <strong>${esc(t.ingest_status||'-')}</strong>. Sync: <strong>${esc(t.sync_status||'-')}</strong>.</div></div></div>
     </div>
-    <div class="events-section"><div class="ev-title">Events</div><div id="eventsArea"></div></div>
+    ${eventsHtml}
   `;
-  const events=data.events||[];
-  const ea=document.getElementById('eventsArea');
-  if(!events.length){ea.innerHTML='<div style="color:var(--text-m);font-size:13px">No events recorded.</div>';}
-  else{ea.innerHTML=events.map(ev=>`<div class="ev-card"><div class="ev-time">${esc(ev.saved_at||'')}</div><div class="ev-body">${esc(JSON.stringify(ev.event??ev,null,2))}</div></div>`).join('');}
 
-  document.getElementById('sidebar').innerHTML=`
+  document.getElementById('sidebarCol').innerHTML=`
+    <div class="sb-badge">\ud83d\udd17 ${esc(t.status||'unknown')}</div>
     <div class="sb-title">Thread</div>
-    <div class="sb-row"><span class="sb-icon">\ud83d\udcc5</span><span class="sb-val">${timeAgo(t.ended_at)}</span></div>
+    <div class="sb-row"><span class="sb-icon">\ud83d\udcc5</span><span class="sb-val">${ago(t.ended_at)}</span></div>
     <div class="sb-row"><span class="sb-icon">\ud83d\udcc1</span><span class="sb-val">${esc(t.repo||'-')}</span></div>
     <div class="sb-row"><span class="sb-icon">\ud83d\udd00</span><span class="sb-val">${esc(t.branch||'-')}</span></div>
     <div class="sb-row"><span class="sb-icon">\ud83e\udde0</span><span class="sb-val">${esc(t.mode||'-')}</span></div>
     <div class="sb-row"><span class="sb-icon">\ud83d\udcb0</span><span class="sb-val">$${n(t.cost_usd).toFixed(2)}${t.cost_is_estimated?' (est.)':''}</span></div>
     <div class="sb-row"><span class="sb-icon">\ud83d\udcbb</span><span class="sb-val">${esc(t.interface||'CLI')}</span></div>
     <div class="sb-row"><span class="sb-icon">\ud83d\udcac</span><span class="sb-val">${n(t.prompt_count)} prompts</span></div>
-    <div class="sb-row"><span class="sb-icon">\ud83d\udcca</span><span class="sb-val">${n(t.context_used_pct).toFixed(1)}% context</span></div>
-    <div class="sb-row"><span class="sb-icon">\u23f1\ufe0f</span><span class="sb-val">${fmtDur(t.duration_sec)}</span></div>
-    <div class="sb-row"><span class="sb-icon">\ud83d\udcdd</span><span class="sb-val"><span class="diff-add">+${fmtNum(plus)}</span> <span class="diff-del">-${fmtNum(minus)}</span> <span class="diff-mod">~${fmtNum(mod)}</span> lines</span></div>
+    <div class="sb-row"><span class="sb-icon">\ud83d\udcca</span><span class="sb-val">${n(t.context_used_pct).toFixed(1)}%</span></div>
+    <div class="sb-row"><span class="sb-icon">\u23f1\ufe0f</span><span class="sb-val">Worked for ${fD(t.duration_sec)}</span></div>
+    <div class="sb-row"><span class="sb-icon">\ud83d\udcdd</span><span class="sb-val"><span class="diff-a">+${fN(plus)}</span> <span class="diff-d">-${fN(minus)}</span> <span class="diff-m">~${fN(mod)}</span> lines</span></div>
     ${n(t.oracle_used)?'<div class="sb-row"><span class="sb-icon">\ud83d\udd2e</span><span class="sb-val">Uses Oracle</span></div>':''}
-    <div class="sb-row"><span class="sb-icon">\u2601\ufe0f</span><span class="sb-val">${esc(t.sync_status||t.remote_status||'-')}</span></div>
-    <div class="sb-title" style="margin-top:16px">Open in CLI</div>
-    <div class="cli-box">cloudmem thread show ${esc(t.thread_id)}</div>
+    <div class="sb-section"><div class="sb-label-title">Open in CLI</div><div class="cli-box">cloudmem thread show ${esc(t.thread_id)}</div></div>
   `;
 }
 
