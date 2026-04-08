@@ -379,7 +379,9 @@ async function loadThreads(){
   }catch(e){document.getElementById('listBody').innerHTML=`<div style="text-align:center;padding:40px;color:#dc2626">${esc(e.message)}</div>`;}
 }
 
-if(base())loadThreads().then(()=>route());else route();
+// Route immediately based on URL, then load list data in background
+route();
+if(base()) loadThreads();
 </script>
 </body>
 </html>
