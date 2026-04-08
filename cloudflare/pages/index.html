@@ -209,8 +209,8 @@ document.getElementById('refreshBtn').onclick=()=>{document.getElementById('cfgP
 
 // Router
 function navigate(path,replace){if(replace)history.replaceState(null,'',path);else history.pushState(null,'',path);route();}
-function showList(){document.getElementById('listView').style.display='';document.getElementById('detailView').style.display='none';document.title='CloudMem · Threads';}
-function showDetail(){document.getElementById('listView').style.display='none';document.getElementById('detailView').style.display='';}
+function showList(){document.getElementById('listView').style.display='block';document.getElementById('detailView').style.display='none';document.title='CloudMem · Threads';}
+function showDetail(){document.getElementById('listView').style.display='none';document.getElementById('detailView').style.display='block';}
 function route(){
   const m=location.pathname.match(/^\/threads\/(.+)$/);
   if(m){showDetail();loadThread(decodeURIComponent(m[1]));}
