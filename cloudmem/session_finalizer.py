@@ -193,6 +193,15 @@ class SessionFinalizer:
                     },
                     home=self._repo_root,
                 )
+                
+                # Add transcript content to payload if available
+                if resolved_transcript and Path(resolved_transcript).is_file():
+                    try:
+                        transcript_content = Path(resolved_transcript).read_text(encoding="utf-8", errors="replace")
+                        payload["transcript_content"] = transcript_content
+                    except Exception as e:
+                        logger.warning(f"Failed to read transcript file: {e}")
+                
                 remote = upload_thread_record(payload)
                 if remote.get("ok"):
                     set_thread_remote_status(

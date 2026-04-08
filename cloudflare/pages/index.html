@@ -95,6 +95,12 @@
     .shell-card span{color:#999;margin-left:4px}
     .shell-card .tool-chev{margin-left:auto}
 
+    /* ── Transcript ── */
+    .transcript-container{margin-top:12px;border:1px solid #ebebeb;border-radius:8px;overflow:hidden;max-height:600px;overflow-y:auto}
+    .transcript-container .msg{margin-top:0;border-bottom:1px solid #f0f0f0;padding:12px}
+    .transcript-container .msg:last-child{border-bottom:none}
+    .transcript-container .tool-card{margin:0;border-radius:0;border-left:none;border-right:none;border-top:none}
+
     /* ── Right Sidebar ── */
     .sidebar{width:300px;border-left:1px solid #eee;padding:20px;flex-shrink:0;position:sticky;top:48px;height:calc(100vh - 48px);overflow-y:auto}
     .sb-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
@@ -273,12 +279,110 @@ async function loadThread(id){
   try{
     const res=await fetch(`${b}/v1/thread/${encodeURIComponent(id)}`);
     const data=await res.json();
-    if(data.thread)renderDetail(data.thread);
+    if(data.thread) {
+      // Load transcript in parallel
+      let transcript = null;
+      try {
+        const transcriptRes = await fetch(`${b}/v1/thread/${encodeURIComponent(id)}/transcript`);
+        if(transcriptRes.ok) {
+          transcript = await transcriptRes.text();
+        }
+      } catch(e) {
+        // Transcript not available
+      }
+      renderDetail(data.thread, transcript);
+    }
     else document.getElementById('centerCol').innerHTML='<div class="empty-detail">Thread not found</div>';
   }catch(e){document.getElementById('centerCol').innerHTML=`<div class="empty-detail">${esc(e.message)}</div>`;}
 }
 
-function renderDetail(t){
+function renderTranscript(transcript) {
+  if (!transcript) return '<div style="color:#999;font-size:13px">No transcript available</div>';
+  
+  const lines = transcript.split('\n').filter(line => line.trim());
+  let html = '';
+  
+  for (const line of lines) {
+    try {
+      const entry = JSON.parse(line);
+      
+      // Skip non-message entries
+      if (!entry.type || entry.type === 'queue-operation' || entry.type === 'file-history-snapshot') {
+        continue;
+      }
+      
+      // User messages
+      if (entry.type === 'user' && entry.message) {
+        const content = entry.message.content;
+        let text = '';
+        if (typeof content === 'string') {
+          text = content;
+        } else if (Array.isArray(content)) {
+          text = content.filter(c => c.type === 'text').map(c => c.text).join('\n');
+        }
+        
+        if (text) {
+          html += `<div class="msg">
+            <div class="msg-av">👤</div>
+            <div class="msg-body">
+              <div style="font-size:12px;color:#888;margin-bottom:4px">User · ${esc(entry.timestamp?.slice(11, 19) || '')}</div>
+              <div style="white-space:pre-wrap">${esc(text)}</div>
+            </div>
+          </div>`;
+        }
+      }
+      
+      // Assistant messages
+      else if (entry.type === 'assistant' && entry.message) {
+        const content = entry.message.content;
+        let text = '';
+        if (typeof content === 'string') {
+          text = content;
+        } else if (Array.isArray(content)) {
+          text = content.filter(c => c.type === 'text').map(c => c.text).join('\n');
+        }
+        
+        if (text) {
+          html += `<div class="msg">
+            <div class="msg-av bot">🤖</div>
+            <div class="msg-body">
+              <div style="font-size:12px;color:#888;margin-bottom:4px">Assistant · ${esc(entry.timestamp?.slice(11, 19) || '')}</div>
+              <div style="white-space:pre-wrap">${esc(text)}</div>
+            </div>
+          </div>`;
+        }
+      }
+      
+      // Tool calls
+      else if (entry.type === 'tool_use' || (entry.message && entry.message.tool_calls)) {
+        const toolCalls = entry.message?.tool_calls || [entry];
+        for (const tool of toolCalls) {
+          const toolName = tool.name || tool.function?.name || 'Unknown Tool';
+          const toolArgs = tool.input || tool.function?.arguments || {};
+          
+          html += `<div class="tool-card">
+            <div class="tool-head" onclick="tog(this)">
+              <span class="tool-icon">🔧</span>
+              <span class="tool-name">${esc(toolName)}</span>
+              <span class="tool-chev">▼</span>
+            </div>
+            <div class="tool-body">
+              <div style="margin-bottom:8px;font-weight:600">Arguments:</div>
+              <pre style="margin:0;white-space:pre-wrap">${esc(JSON.stringify(toolArgs, null, 2))}</pre>
+            </div>
+          </div>`;
+        }
+      }
+      
+    } catch (e) {
+      // Skip invalid JSON lines
+    }
+  }
+  
+  return html || '<div style="color:#999;font-size:13px">No messages found in transcript</div>';
+}
+
+function renderDetail(t, transcript){
   const plus=n(t.lines_added),minus=n(t.lines_deleted),mod=n(t.lines_modified);
   const tokIn=n(t.token_input),tokOut=n(t.token_output);
   const pct=n(t.context_used_pct).toFixed(0);
@@ -327,6 +431,12 @@ function renderDetail(t){
       <span class="tool-chev">⬍</span>
     </div>
     <div class="tool-body">${esc(t.commit_sha)}</div>`:''}
+
+    ${transcript?`
+    <div class="section-toggle" onclick="togSec(this)" style="margin-top:24px"><span class="chev">›</span> Transcript (${transcript.split('\\n').length} lines)</div>
+    <div class="section-body">
+      <div class="transcript-container">${renderTranscript(transcript)}</div>
+    </div>`:''}
   `;
 
   // ── SIDEBAR ──

@@ -15,7 +15,14 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname.startsWith("/v1/thread/")) {
-      const threadId = url.pathname.split("/").pop();
+      const pathParts = url.pathname.split("/");
+      const threadId = pathParts[3];
+      
+      // Check if requesting transcript
+      if (pathParts.length === 5 && pathParts[4] === "transcript") {
+        return handleTranscript(threadId, env);
+      }
+      
       return handleShow(threadId, env);
     }
 
@@ -112,6 +119,14 @@ async function handleFinalize(request, env) {
   // 1) Raw source of truth in R2 (optional)
   if (env.THREADS_R2) {
     await env.THREADS_R2.put(key, JSON.stringify(payload));
+    
+    // Store transcript if provided
+    if (payload.transcript_content) {
+      const transcriptKey = `transcripts/${threadId}.jsonl`;
+      await env.THREADS_R2.put(transcriptKey, payload.transcript_content);
+      // Remove transcript content from payload to avoid storing twice
+      delete payload.transcript_content;
+    }
   }
 
   // 2) Query index in D1
@@ -215,4 +230,44 @@ async function handleShow(threadId, env) {
   const row = await env.THREADS_DB.prepare(`SELECT * FROM thread_ledger WHERE thread_id = ?1`).bind(threadId).first();
   if (!row) return json({ error: "thread_not_found" }, 404, env);
   return json({ thread: row }, 200, env);
+}
+
+async function handleTranscript(threadId, env) {
+  if (!threadId) return json({ error: "missing_thread_id" }, 400, env);
+  
+  // First get the thread to find the R2 key
+  const row = await env.THREADS_DB.prepare(`SELECT * FROM thread_ledger WHERE thread_id = ?1`).bind(threadId).first();
+  if (!row) return json({ error: "thread_not_found" }, 404, env);
+  
+  // Try to get transcript from R2
+  if (env.THREADS_R2) {
+    // Try multiple possible key formats
+    const possibleKeys = [
+      `transcripts/${threadId}.jsonl`,
+      `transcripts/${threadId}.json`,
+      `threads/${row.ended_at?.slice(0, 10) || 'unknown'}/${threadId}.jsonl`,
+      `threads/${row.ended_at?.slice(0, 10) || 'unknown'}/${threadId}.json`,
+    ];
+    
+    for (const key of possibleKeys) {
+      try {
+        const object = await env.THREADS_R2.get(key);
+        if (object) {
+          const content = await object.text();
+          return new Response(content, {
+            status: 200,
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8",
+              "Access-Control-Allow-Origin": env.CORS_ORIGIN || "*",
+              "Cache-Control": "public, max-age=3600"
+            }
+          });
+        }
+      } catch (e) {
+        // Continue to next key
+      }
+    }
+  }
+  
+  return json({ error: "transcript_not_found" }, 404, env);
 }
