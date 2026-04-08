@@ -3,89 +3,143 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CloudMem u00b7 Threads</title>
+  <title>CloudMem · Threads</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#fff;color:#111827;line-height:1.6}
-    a{color:#6366f1;text-decoration:none} a:hover{text-decoration:underline}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#fff;color:#1a1a1a;line-height:1.6;-webkit-font-smoothing:antialiased}
+    a{color:inherit;text-decoration:none}
 
-    .nav{height:52px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;padding:0 24px;position:sticky;top:0;z-index:100;background:#fff}
-    .logo{font-weight:800;font-size:18px;color:#6366f1;letter-spacing:-.4px;cursor:pointer} .logo span{color:#111827}
-    .nav-links{display:flex;gap:16px;margin-left:24px}
-    .nav-links a{font-size:14px;color:#6b7280;display:flex;align-items:center;gap:4px}
-    .nav-links a:hover,.nav-links a.active{color:#111827;text-decoration:none}
-    .nav-right{margin-left:auto;display:flex;align-items:center;gap:10px}
-    .nav-btn{background:none;border:1px solid #e5e7eb;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:13px;color:#6b7280}
-    .nav-btn:hover{background:#f9fafb}
+    /* ── Nav ── */
+    .nav{height:48px;border-bottom:1px solid #eee;display:flex;align-items:center;padding:0 16px;position:sticky;top:0;z-index:100;background:#fff}
+    .nav-logo{font-weight:800;font-size:20px;color:#1a1a1a;letter-spacing:-0.5px;cursor:pointer}
+    .nav-sep{width:1px;height:20px;background:#e5e5e5;margin:0 12px}
+    .nav-link{font-size:14px;color:#666;display:flex;align-items:center;gap:5px;cursor:pointer}
+    .nav-link:hover{color:#1a1a1a}
+    .nav-link svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.5}
+    .nav-right{margin-left:auto;display:flex;gap:10px;align-items:center}
+    .nav-btn{background:none;border:1px solid #e5e5e5;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;color:#666}
+    .nav-btn:hover{background:#f9f9f9}
 
-    .cfg{display:none;position:fixed;top:52px;right:20px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.12);z-index:200;width:380px}
+    /* ── Config ── */
+    .cfg{display:none;position:fixed;top:48px;right:16px;background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,.12);z-index:200;width:360px}
     .cfg.open{display:block}
-    .cfg label{font-size:12px;font-weight:600;color:#6b7280}
-    .cfg input{width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;margin:6px 0 12px;outline:none}
-    .cfg input:focus{border-color:#6366f1}
-    .cfg-btns{display:flex;gap:8px}
-    .btn-p{background:#6366f1;color:#fff;border:none;border-radius:8px;padding:7px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
-    .btn-s{background:#f3f4f6;color:#111;border:1px solid #e5e7eb;border-radius:8px;padding:7px 14px;font:inherit;font-size:13px;cursor:pointer}
+    .cfg label{font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px}
+    .cfg input{width:100%;border:1px solid #e5e5e5;border-radius:6px;padding:7px 10px;font:inherit;font-size:13px;margin:5px 0 10px;outline:none}
+    .cfg input:focus{border-color:#333}
+    .cfg-btns{display:flex;gap:6px}
+    .btn-p{background:#1a1a1a;color:#fff;border:none;border-radius:6px;padding:6px 12px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+    .btn-s{background:#f5f5f5;color:#333;border:1px solid #e5e5e5;border-radius:6px;padding:6px 12px;font:inherit;font-size:12px;cursor:pointer}
 
-    /* List */
-    .list-view{max-width:860px;margin:0 auto;padding:32px 24px}
-    .list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-    .list-header h1{font-size:22px;font-weight:700}
-    .list-header .count{font-size:14px;color:#6b7280}
-    .list-filters{display:flex;gap:8px;margin-bottom:16px}
-    .list-filters input,.list-filters select{border:1px solid #e5e7eb;border-radius:8px;padding:7px 12px;font:inherit;font-size:13px;outline:none}
-    .list-filters input{flex:1} .list-filters input:focus{border-color:#6366f1}
-    .trow{display:grid;grid-template-columns:1fr 150px 100px 80px 70px 90px;gap:12px;padding:12px 16px;border-bottom:1px solid #f0f1f3;align-items:center;cursor:pointer;border-radius:10px;transition:background .12s}
-    .trow:hover{background:#f9fafb}
-    .trow-head{font-size:12px;font-weight:600;color:#9ca3af;cursor:default;border-bottom:2px solid #e5e7eb} .trow-head:hover{background:transparent}
-    .tid{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .tmeta{font-size:12px;color:#6b7280}
-    .pill{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:600;display:inline-block}
-    .pill-ok{background:#f0fdf4;color:#16a34a} .pill-err{background:#fef2f2;color:#dc2626} .pill-mode{background:#eef2ff;color:#6366f1}
+    /* ── List View ── */
+    .list-view{max-width:820px;margin:0 auto;padding:40px 20px}
+    .list-view h1{font-size:24px;font-weight:700;margin-bottom:20px}
+    .list-filters{display:flex;gap:8px;margin-bottom:20px}
+    .list-filters input,.list-filters select{border:1px solid #e5e5e5;border-radius:6px;padding:7px 10px;font:inherit;font-size:13px;outline:none}
+    .list-filters input{flex:1}
+    .list-filters input:focus{border-color:#333}
+    .tcard{padding:14px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;display:flex;align-items:flex-start;gap:12px}
+    .tcard:hover{background:#fafafa;margin:0 -12px;padding-left:12px;padding-right:12px;border-radius:8px}
+    .tc-left{flex:1;min-width:0}
+    .tc-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tc-meta{font-size:12px;color:#888;margin-top:2px}
+    .tc-right{text-align:right;flex-shrink:0}
+    .tc-time{font-size:12px;color:#888}
+    .tc-diff{font-size:11px;margin-top:3px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    .pill{font-size:10px;padding:2px 7px;border-radius:999px;font-weight:600}
+    .pill-ok{background:#ecfdf5;color:#059669}
+    .pill-err{background:#fef2f2;color:#dc2626}
 
-    /* Detail */
+    /* ── Detail View ── */
     .detail-view{display:none}
-    .detail-layout{display:grid;grid-template-columns:1fr 300px;min-height:calc(100vh - 52px)}
-    .center{max-width:800px;padding:40px 32px 80px;margin:0 auto}
-    .back{font-size:13px;color:#6b7280;display:inline-flex;align-items:center;gap:4px;margin-bottom:20px;cursor:pointer} .back:hover{color:#111}
-    .d-title{font-size:26px;font-weight:700;letter-spacing:-.4px;text-align:center}
-    .d-author{text-align:center;margin-top:8px;font-size:14px;color:#6b7280}
-    .d-tid{text-align:center;margin-top:6px;font-family:ui-monospace,monospace;font-size:11px;color:#9ca3af;word-break:break-all}
-    .stat-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;padding:16px;background:#f9fafb;border-radius:12px;border:1px solid #e5e7eb}
-    .stat-item{text-align:center;flex:1;min-width:80px} .stat-item .sv{font-size:18px;font-weight:700} .stat-item .sl{font-size:11px;color:#9ca3af;margin-top:2px}
-    .timeline{margin-top:32px}
-    .t-msg{display:flex;gap:14px;margin-bottom:24px}
-    .t-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;margin-top:2px;background:#e0e7ff}
-    .t-body{flex:1;min-width:0} .t-role{font-size:12px;font-weight:600;color:#6b7280;margin-bottom:4px} .t-text{font-size:14px;color:#374151;line-height:1.7}
-    .t-tool{background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;overflow:hidden}
-    .t-tool-head{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;font-size:13px} .t-tool-head:hover{background:#f3f4f6}
-    .t-tool-name{font-weight:600;color:#374151} .t-tool-desc{color:#9ca3af;font-size:12px}
-    .t-tool-chevron{margin-left:auto;color:#9ca3af;transition:transform .2s} .t-tool-chevron.open{transform:rotate(180deg)}
-    .t-tool-body{display:none;border-top:1px solid #e5e7eb;padding:12px 14px;background:#fafbfc} .t-tool-body.open{display:block}
-    .t-tool-body pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;color:#334155;line-height:1.6}
-    .diff-a{color:#16a34a;font-weight:600} .diff-d{color:#dc2626;font-weight:600} .diff-m{color:#ca8a04;font-weight:600}
-    .sidebar{border-left:1px solid #e5e7eb;padding:24px 20px;background:#fff;position:sticky;top:52px;height:calc(100vh - 52px);overflow-y:auto}
-    .sb-badge{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#6b7280;border:1px solid #e5e7eb;border-radius:999px;padding:3px 10px;margin-bottom:16px}
-    .sb-title{font-size:14px;font-weight:700;margin-bottom:14px}
-    .sb-row{display:flex;gap:10px;margin-bottom:11px;font-size:13px;line-height:1.4}
-    .sb-icon{width:18px;text-align:center;flex-shrink:0;font-size:14px} .sb-val{color:#111827;font-weight:500;word-break:break-all}
-    .sb-section{margin-top:20px;padding-top:16px;border-top:1px solid #f0f1f3}
-    .sb-label-title{font-size:13px;font-weight:700;margin-bottom:8px}
-    .cli-box{background:#f4f4f7;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-family:ui-monospace,monospace;font-size:12px;color:#6b7280;display:flex;align-items:center;justify-content:space-between;gap:6px}
-    .cli-box button{background:none;border:none;cursor:pointer;color:#9ca3af;font-size:13px;padding:2px} .cli-box button:hover{color:#111}
-    .url-box{margin-top:8px;background:#f4f4f7;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-family:ui-monospace,monospace;font-size:11px;color:#6b7280;display:flex;align-items:center;justify-content:space-between;gap:6px;word-break:break-all}
-    .url-box a{color:#6366f1;font-size:11px}
-    .empty{text-align:center;padding:60px 20px;color:#9ca3af} .empty .e-icon{font-size:40px;margin-bottom:12px}
-    @media(max-width:900px){.detail-layout{grid-template-columns:1fr} .sidebar{display:none}}
-    @media(max-width:700px){.trow{grid-template-columns:1fr;gap:4px} .trow-head{display:none}}
+    .detail-wrap{display:flex;min-height:calc(100vh - 48px)}
+    .detail-main{flex:1;min-width:0;padding:0}
+    .detail-content{max-width:780px;margin:0 auto;padding:48px 40px 80px}
+
+    /* ── Title ── */
+    .d-title{font-size:28px;font-weight:700;text-align:center;letter-spacing:-0.5px;line-height:1.3}
+    .d-author{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;font-size:14px;color:#666}
+    .d-avatar{width:24px;height:24px;border-radius:50%;background:#e8d5c4;display:flex;align-items:center;justify-content:center;font-size:11px}
+
+    /* ── Messages ── */
+    .msg{display:flex;gap:12px;margin-top:28px}
+    .msg-av{width:32px;height:32px;border-radius:50%;background:#e8d5c4;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-top:2px}
+    .msg-av.bot{background:#e0e7ff}
+    .msg-body{flex:1;min-width:0;font-size:14px;color:#333;line-height:1.75}
+
+    /* ── Collapsible sections ── */
+    .section-toggle{display:flex;align-items:center;gap:6px;margin-top:20px;cursor:pointer;font-size:14px;color:#333;user-select:none}
+    .section-toggle:hover{color:#000}
+    .section-toggle .chev{font-size:10px;color:#999;transition:transform .15s}
+    .section-toggle.open .chev{transform:rotate(90deg)}
+    .section-body{display:none;margin-top:8px;padding-left:18px;font-size:14px;color:#444;line-height:1.75}
+    .section-body.open{display:block}
+
+    /* ── Tool cards ── */
+    .tool-card{background:#f9f9f9;border:1px solid #ebebeb;border-radius:8px;margin-top:12px;overflow:hidden}
+    .tool-head{display:flex;align-items:center;gap:6px;padding:8px 12px;font-size:13px;cursor:pointer}
+    .tool-head:hover{background:#f3f3f3}
+    .tool-icon{font-size:14px;color:#888}
+    .tool-name{font-weight:600;color:#333}
+    .tool-sep{color:#ccc}
+    .tool-method{font-weight:600;color:#333}
+    .tool-label{color:#999;margin-left:4px}
+    .tool-chev{margin-left:auto;color:#ccc;font-size:11px;transition:transform .15s}
+    .tool-chev.open{transform:rotate(180deg)}
+    .tool-body{display:none;border-top:1px solid #ebebeb;padding:10px 12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;color:#444;line-height:1.6;background:#fafafa}
+    .tool-body.open{display:block}
+
+    /* ── Shell card ── */
+    .shell-card{background:#f9f9f9;border:1px solid #ebebeb;border-radius:8px;margin-top:12px;padding:8px 12px;display:flex;align-items:center;font-size:13px;cursor:pointer}
+    .shell-card:hover{background:#f3f3f3}
+    .shell-card code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;color:#333}
+    .shell-card span{color:#999;margin-left:4px}
+    .shell-card .tool-chev{margin-left:auto}
+
+    /* ── Right Sidebar ── */
+    .sidebar{width:300px;border-left:1px solid #eee;padding:20px;flex-shrink:0;position:sticky;top:48px;height:calc(100vh - 48px);overflow-y:auto}
+    .sb-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    .sb-link{display:flex;align-items:center;gap:4px;font-size:12px;color:#888;border:1px solid #e5e5e5;border-radius:999px;padding:3px 10px}
+    .sb-dots{font-size:16px;color:#ccc;cursor:pointer;letter-spacing:-1px}
+    .sb-heading{font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:12px}
+    .sb-row{display:flex;align-items:center;gap:8px;font-size:13px;color:#333;margin-bottom:8px;line-height:1.4}
+    .sb-row svg{width:15px;height:15px;stroke:#999;fill:none;stroke-width:1.5;flex-shrink:0}
+    .sb-row .val{color:#333}
+    .sb-row a{color:#333}
+    .sb-row a:hover{text-decoration:underline}
+    .sb-row .av-small{width:20px;height:20px;border-radius:50%;background:#e8d5c4;display:inline-flex;align-items:center;justify-content:center;font-size:9px;margin-left:auto}
+    .diff-a{color:#16a34a;font-weight:500}
+    .diff-d{color:#dc2626;font-weight:500}
+    .diff-m{color:#999;font-weight:500}
+
+    .sb-labels{margin-top:16px;padding-top:14px;border-top:1px solid #f0f0f0}
+    .sb-labels-title{font-size:13px;font-weight:700;margin-bottom:8px}
+    .sb-labels-row{display:flex;align-items:center;gap:6px;font-size:12px;color:#999}
+    .sb-labels-row svg{width:14px;height:14px;stroke:#ccc;fill:none;stroke-width:1.5}
+
+    .sb-cli{margin-top:16px;padding-top:14px;border-top:1px solid #f0f0f0}
+    .sb-cli-title{font-size:13px;font-weight:700;margin-bottom:8px}
+    .sb-cli-box{background:#f5f5f5;border:1px solid #e5e5e5;border-radius:6px;padding:7px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#666;display:flex;align-items:center;justify-content:space-between}
+    .sb-cli-box button{background:none;border:none;cursor:pointer;color:#ccc;font-size:13px;padding:0}
+    .sb-cli-box button:hover{color:#333}
+
+    .empty-detail{display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;color:#ccc;font-size:14px}
+
+    @media(max-width:900px){.sidebar{display:none} .detail-content{padding:32px 20px 60px}}
+    @media(max-width:700px){.list-filters{flex-direction:column}}
   </style>
 </head>
 <body>
 
 <nav class="nav">
-  <div class="logo" onclick="navigate('/')">Cloud<span>Mem</span></div>
-  <div class="nav-links"><a href="/threads" onclick="navigate('/threads');return false" class="active">ud83euddf5 Threads</a></div>
-  <div class="nav-right"><button class="nav-btn" id="cfgBtn">u2699ufe0f Settings</button></div>
+  <div class="nav-logo" onclick="navigate('/threads')">CloudMem</div>
+  <div class="nav-sep"></div>
+  <div class="nav-link" onclick="navigate('/threads')">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
+    Threads
+  </div>
+  <div class="nav-right">
+    <button class="nav-btn" id="cfgBtn">⚙ Settings</button>
+  </div>
 </nav>
 
 <div class="cfg" id="cfgPanel">
@@ -93,42 +147,60 @@
   <input id="apiInput" placeholder="https://api.littlescene.com" />
   <div class="cfg-btns">
     <button class="btn-p" id="saveBtn">Save & Refresh</button>
-    <button class="btn-s" id="refreshBtn">Refresh Only</button>
+    <button class="btn-s" id="refreshBtn">Refresh</button>
   </div>
 </div>
 
+<!-- LIST -->
 <div id="listView" class="list-view">
-  <div class="list-header"><h1>Threads</h1><div class="count" id="listCount"></div></div>
+  <h1>Threads</h1>
   <div class="list-filters">
-    <input id="search" placeholder="Search thread, repo, branchu2026" />
+    <input id="search" placeholder="Search…" />
     <select id="repoF"><option value="">All repos</option></select>
     <select id="branchF"><option value="">All branches</option></select>
   </div>
-  <div id="listBody"><div class="empty"><div class="e-icon">u23f3</div>Loading threadsu2026</div></div>
+  <div id="listBody"></div>
 </div>
 
+<!-- DETAIL -->
 <div id="detailView" class="detail-view">
-  <div class="detail-layout">
-    <div><div class="center" id="centerCol"></div></div>
+  <div class="detail-wrap">
+    <div class="detail-main"><div class="detail-content" id="centerCol"></div></div>
     <div class="sidebar" id="sidebarCol"></div>
   </div>
 </div>
 
 <script>
 const KEY='cloudmem_api_base';
-const apiInput=document.getElementById('apiInput');
+const apiEl=document.getElementById('apiInput');
 const HOST=location.hostname;
-const inferred=HOST==='threads.littlescene.com'?'https://api.littlescene.com':'';
-apiInput.value=localStorage.getItem(KEY)||window.CLOUDMEM_API_BASE||inferred||'';
+apiEl.value=localStorage.getItem(KEY)||(HOST==='threads.littlescene.com'?'https://api.littlescene.com':'');
 let allRows=[],filtered=[];
 
-function n(x){return Number(x||0)}
-function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function fN(v){v=n(v);if(v>=1e6)return(v/1e6).toFixed(1)+'M';if(v>=1e3)return(v/1e3).toFixed(1)+'k';return String(v)}
-function fD(s){s=n(s);if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+s%60+'s';const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h+'h '+m+'m'}
-function ago(iso){if(!iso)return'-';const d=(Date.now()-new Date(iso).getTime())/1e3;if(d<60)return'just now';if(d<3600)return Math.floor(d/60)+'m ago';if(d<86400)return Math.floor(d/3600)+'h ago';if(d<604800)return Math.floor(d/86400)+'d ago';return new Date(iso).toLocaleDateString()}
-function base(){return(apiInput.value||'').trim().replace(/\/$/,'')}
-function threadUrl(id){return`${location.origin}/threads/${encodeURIComponent(id)}`}
+const n=x=>Number(x||0);
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const fN=v=>{v=n(v);if(v>=1e6)return(v/1e6).toFixed(1)+'M';if(v>=1e3)return(v/1e3).toFixed(1)+'k';return String(v)};
+const fD=s=>{s=n(s);if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+' minutes';const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h+' hours and '+m+' mi…'};
+const ago=iso=>{if(!iso)return'-';const d=(Date.now()-new Date(iso).getTime())/1e3;if(d<60)return'just now';if(d<3600)return Math.floor(d/60)+'m ago';if(d<86400)return Math.floor(d/3600)+'h ago';if(d<604800)return Math.floor(d/86400)+'d ago';return new Date(iso).toLocaleDateString()};
+const base=()=>(apiEl.value||'').trim().replace(/\/$/,'');
+
+// SVG icons (matching Amp's thin-line style)
+const I={
+  cal:`<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
+  repo:`<svg viewBox="0 0 24 24"><path d="M3 7v13a2 2 0 002 2h14"/><path d="M8 2h12a2 2 0 012 2v16a2 2 0 01-2 2H8a2 2 0 01-2-2V4a2 2 0 012-2z"/></svg>`,
+  branch:`<svg viewBox="0 0 24 24"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v1a2 2 0 01-2 2H8a2 2 0 01-2-2V9"/><path d="M12 12v3"/></svg>`,
+  brain:`<svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 017 7c0 3-2 5-4 6v1a2 2 0 01-2 2h-2a2 2 0 01-2-2v-1c-2-1-4-3-4-6a7 7 0 017-7z"/></svg>`,
+  dollar:`<svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6"/></svg>`,
+  monitor:`<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`,
+  chat:`<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>`,
+  check:`<svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>`,
+  clock:`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`,
+  code:`<svg viewBox="0 0 24 24"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>`,
+  eye:`<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  link:`<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>`,
+  tag:`<svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
+  copy:`<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`,
+};
 
 // Config
 document.getElementById('cfgBtn').onclick=()=>document.getElementById('cfgPanel').classList.toggle('open');
@@ -136,25 +208,13 @@ document.getElementById('saveBtn').onclick=()=>{localStorage.setItem(KEY,base())
 document.getElementById('refreshBtn').onclick=()=>{document.getElementById('cfgPanel').classList.remove('open');loadThreads();};
 
 // Router
-function navigate(path,replace){
-  if(replace)history.replaceState(null,'',path);
-  else history.pushState(null,'',path);
-  route();
-}
-function showList(){document.getElementById('listView').style.display='';document.getElementById('detailView').style.display='none';document.title='CloudMem \u00b7 Threads';}
+function navigate(path,replace){if(replace)history.replaceState(null,'',path);else history.pushState(null,'',path);route();}
+function showList(){document.getElementById('listView').style.display='';document.getElementById('detailView').style.display='none';document.title='CloudMem · Threads';}
 function showDetail(){document.getElementById('listView').style.display='none';document.getElementById('detailView').style.display='';}
-
 function route(){
-  const path=location.pathname;
-  const m=path.match(/^\/threads\/(.+)$/);
-  if(m){
-    const tid=decodeURIComponent(m[1]);
-    showDetail();
-    loadAndRenderThread(tid);
-  } else {
-    showList();
-    if(!allRows.length && base()) loadThreads();
-  }
+  const m=location.pathname.match(/^\/threads\/(.+)$/);
+  if(m){showDetail();loadThread(decodeURIComponent(m[1]));}
+  else{showList();if(!allRows.length&&base())loadThreads();}
 }
 window.addEventListener('popstate',route);
 
@@ -162,20 +222,13 @@ window.addEventListener('popstate',route);
 function fillFilters(){
   const repos=[...new Set(allRows.map(r=>r.repo).filter(Boolean))].sort();
   const branches=[...new Set(allRows.map(r=>r.branch).filter(Boolean))].sort();
-  const rs=document.getElementById('repoF'),bs=document.getElementById('branchF');
-  rs.innerHTML='<option value="">All repos</option>'+repos.map(v=>`<option>${esc(v)}</option>`).join('');
-  bs.innerHTML='<option value="">All branches</option>'+branches.map(v=>`<option>${esc(v)}</option>`).join('');
+  document.getElementById('repoF').innerHTML='<option value="">All repos</option>'+repos.map(v=>`<option>${esc(v)}</option>`).join('');
+  document.getElementById('branchF').innerHTML='<option value="">All branches</option>'+branches.map(v=>`<option>${esc(v)}</option>`).join('');
 }
 function applyFilter(){
   const q=document.getElementById('search').value.trim().toLowerCase();
-  const repo=document.getElementById('repoF').value;
-  const branch=document.getElementById('branchF').value;
-  filtered=allRows.filter(r=>{
-    if(repo&&r.repo!==repo)return false;
-    if(branch&&r.branch!==branch)return false;
-    if(!q)return true;
-    return`${r.thread_id||''} ${r.repo||''} ${r.branch||''}`.toLowerCase().includes(q);
-  });
+  const repo=document.getElementById('repoF').value,branch=document.getElementById('branchF').value;
+  filtered=allRows.filter(r=>{if(repo&&r.repo!==repo)return false;if(branch&&r.branch!==branch)return false;if(!q)return true;return`${r.thread_id||''} ${r.repo||''} ${r.branch||''}`.toLowerCase().includes(q);});
   renderList();
 }
 document.getElementById('search').addEventListener('input',applyFilter);
@@ -184,145 +237,128 @@ document.getElementById('branchF').addEventListener('change',applyFilter);
 
 // List
 function renderList(){
-  document.getElementById('listCount').textContent=`${filtered.length} threads`;
   const el=document.getElementById('listBody');
-  if(!filtered.length){el.innerHTML='<div class="empty"><div class="e-icon">ud83dudced</div>No threads found</div>';return;}
-  el.innerHTML='<div class="trow trow-head"><span>Thread</span><span>Repo</span><span>Status</span><span>Mode</span><span>Diff</span><span>Time</span></div>'+filtered.map(r=>{
-    const sc=r.status==='completed'?'pill-ok':r.status==='failed'?'pill-err':'pill-mode';
-    const plus=n(r.lines_added),minus=n(r.lines_deleted);
-    return`<div class="trow" data-id="${esc(r.thread_id)}">
-      <div><div class="tid">${esc(r.thread_id)}</div><div class="tmeta">${esc(r.branch||'-')}</div></div>
-      <div class="tmeta">${esc(r.repo||'-')}</div>
-      <div><span class="pill ${sc}">${esc(r.status||'?')}</span></div>
-      <div class="tmeta">${esc(r.mode||'-')}</div>
-      <div class="tmeta"><span class="diff-a">+${fN(plus)}</span> <span class="diff-d">-${fN(minus)}</span></div>
-      <div class="tmeta">${ago(r.ended_at)}</div>
-    </div>`;
-  }).join('');
-  el.querySelectorAll('.trow:not(.trow-head)').forEach(el=>{
-    el.addEventListener('click',()=>navigate('/threads/'+encodeURIComponent(el.dataset.id)));
-  });
+  if(!filtered.length){el.innerHTML='<div style="text-align:center;padding:40px;color:#ccc">No threads</div>';return;}
+  el.innerHTML=filtered.map(r=>{
+    const sc=r.status==='completed'?'pill-ok':r.status==='failed'?'pill-err':'';
+    const plus=n(r.lines_added),minus=n(r.lines_deleted),mod=n(r.lines_modified);
+    return`<div class="tcard" data-id="${esc(r.thread_id)}">
+      <div class="tc-left">
+        <div class="tc-title">${esc(r.repo||r.thread_id)}</div>
+        <div class="tc-meta">${esc(r.branch||'-')} · ${esc(r.mode||'CLI')} · <span class="pill ${sc}">${esc(r.status||'?')}</span></div>
+      </div>
+      <div class="tc-right">
+        <div class="tc-time">${ago(r.ended_at)}</div>
+        <div class="tc-diff"><span class="diff-a">+${fN(plus)}</span> <span class="diff-d">-${fN(minus)}</span> <span class="diff-m">~${fN(mod)}</span></div>
+      </div>
+    </div>`;}).join('');
+  el.querySelectorAll('.tcard').forEach(el=>el.addEventListener('click',()=>navigate('/threads/'+encodeURIComponent(el.dataset.id))));
+}
+
+// Toggle helper
+function tog(btn){
+  const body=btn.nextElementSibling;body.classList.toggle('open');
+  const ch=btn.querySelector('.tool-chev');if(ch)ch.classList.toggle('open');
+}
+function togSec(el){
+  el.classList.toggle('open');
+  el.nextElementSibling.classList.toggle('open');
 }
 
 // Detail
-async function loadAndRenderThread(id){
+async function loadThread(id){
   const b=base();
-  if(!b){document.getElementById('centerCol').innerHTML='<div class="empty"><div class="e-icon">u2699ufe0f</div>Set API URL in Settings first</div>';return;}
-  document.getElementById('centerCol').innerHTML='<div class="empty"><div class="e-icon">u23f3</div>Loading threadu2026</div>';
+  if(!b){document.getElementById('centerCol').innerHTML='<div class="empty-detail">Set API URL in Settings</div>';return;}
+  document.getElementById('centerCol').innerHTML='<div class="empty-detail">Loading…</div>';
   try{
     const res=await fetch(`${b}/v1/thread/${encodeURIComponent(id)}`);
     const data=await res.json();
-    if(data.thread) renderDetail(data.thread);
-    else document.getElementById('centerCol').innerHTML='<div class="empty"><div class="e-icon">u274c</div>Thread not found</div>';
-  }catch(e){
-    document.getElementById('centerCol').innerHTML=`<div class="empty"><div class="e-icon">u274c</div>${esc(e.message)}</div>`;
-  }
-}
-
-function toggleTool(btn){
-  const body=btn.closest('.t-tool').querySelector('.t-tool-body')||btn.nextElementSibling;
-  body.classList.toggle('open');
-  const chev=btn.querySelector('.t-tool-chevron');
-  if(chev)chev.classList.toggle('open');
+    if(data.thread)renderDetail(data.thread);
+    else document.getElementById('centerCol').innerHTML='<div class="empty-detail">Thread not found</div>';
+  }catch(e){document.getElementById('centerCol').innerHTML=`<div class="empty-detail">${esc(e.message)}</div>`;}
 }
 
 function renderDetail(t){
   const plus=n(t.lines_added),minus=n(t.lines_deleted),mod=n(t.lines_modified);
   const tokIn=n(t.token_input),tokOut=n(t.token_output);
-  const url=threadUrl(t.thread_id);
-  document.title=`${t.repo||t.thread_id} \u00b7 CloudMem`;
+  const pct=n(t.context_used_pct).toFixed(0);
+  const url=`${location.origin}/threads/${encodeURIComponent(t.thread_id)}`;
+  document.title=`${t.repo||t.thread_id} · CloudMem`;
 
+  // ── CENTER ──
   document.getElementById('centerCol').innerHTML=`
-    <div class="back" onclick="navigate('/threads')">u2190 Threads</div>
+    <div style="margin-bottom:8px"><span style="font-size:13px;color:#888;cursor:pointer" onclick="navigate('/threads')">← Threads</span></div>
     <div class="d-title">${esc(t.repo||t.thread_id)}</div>
-    <div class="d-author">${esc(t.branch||'-')} \u00b7 ${esc(t.mode||'CLI')} \u00b7 ${ago(t.ended_at)}</div>
-    <div class="d-tid">${esc(t.thread_id)}</div>
-
-    <div class="stat-row">
-      <div class="stat-item"><div class="sv">${fD(t.duration_sec)}</div><div class="sl">Duration</div></div>
-      <div class="stat-item"><div class="sv">${n(t.prompt_count)}</div><div class="sl">Prompts</div></div>
-      <div class="stat-item"><div class="sv">${fN(tokIn+tokOut)}</div><div class="sl">Tokens</div></div>
-      <div class="stat-item"><div class="sv">$${n(t.cost_usd).toFixed(2)}</div><div class="sl">Cost</div></div>
-      <div class="stat-item"><div class="sv">${n(t.context_used_pct).toFixed(0)}%</div><div class="sl">Context</div></div>
+    <div class="d-author">
+      <div class="d-avatar"></div>
+      ${esc(t.repo||'-')} · ${esc(t.branch||'-')}
     </div>
 
-    <div class="timeline">
-      ${plus||minus||mod?`
-      <div class="t-tool">
-        <div class="t-tool-head" onclick="toggleTool(this)">
-          <span style="font-size:14px">ud83dudcdd</span>
-          <span class="t-tool-name">Code Changes</span>
-          <span class="t-tool-desc"><span class="diff-a">+${fN(plus)}</span> <span class="diff-d">-${fN(minus)}</span> <span class="diff-m">~${fN(mod)}</span> lines \u00b7 ${n(t.files_changed)} files</span>
-          <span class="t-tool-chevron">\u25be</span>
-        </div>
-        <div class="t-tool-body"><pre>Files changed: ${n(t.files_changed)}\nLines added:   ${plus}\nLines deleted: ${minus}\nLines modified:${mod}\nCommit: ${esc(t.commit_sha||'-')}</pre></div>
-      </div>`:''}
-
-      ${t.transcript_path?`
-      <div class="t-tool">
-        <div class="t-tool-head" onclick="toggleTool(this)">
-          <span style="font-size:14px">ud83dudcc4</span>
-          <span class="t-tool-name">Transcript</span>
-          <span class="t-tool-desc">${esc(t.transcript_path)}</span>
-          <span class="t-tool-chevron">\u25be</span>
-        </div>
-        <div class="t-tool-body"><pre>${esc(t.transcript_path)}</pre></div>
-      </div>`:''}
-
-      ${t.error_code?`
-      <div class="t-msg">
-        <div class="t-avatar" style="background:#fef2f2">u26a0ufe0f</div>
-        <div class="t-body">
-          <div class="t-role">Error</div>
-          <div class="t-text" style="color:#dc2626">${esc(t.error_code)}: ${esc(t.error_detail||'')}</div>
-        </div>
-      </div>`:''}
-
-      <div class="t-msg">
-        <div class="t-avatar">ud83eudd16</div>
-        <div class="t-body">
-          <div class="t-role">Session Summary</div>
-          <div class="t-text">
-            Worked for <strong>${fD(t.duration_sec)}</strong> on <strong>${esc(t.repo||'-')}</strong> (${esc(t.branch||'-')}).
-            Processed <strong>${n(t.prompt_count)}</strong> prompts using <strong>${fN(tokIn+tokOut)}</strong> tokens.
-            ${plus||minus?`Changed <strong>${n(t.files_changed)}</strong> files (<span class="diff-a">+${fN(plus)}</span> <span class="diff-d">-${fN(minus)}</span>).`:''}
-            ${n(t.oracle_used)?'<strong>Oracle</strong> was consulted.':''}
-            Ingest: <strong>${esc(t.ingest_status||'-')}</strong>. Sync: <strong>${esc(t.sync_status||'-')}</strong>.
-          </div>
-        </div>
+    <div class="msg">
+      <div class="msg-av">🤖</div>
+      <div class="msg-body">
+        Worked on <strong>${esc(t.repo||'-')}</strong> (${esc(t.branch||'-')}) for ${fD(t.duration_sec)}.
+        Processed ${n(t.prompt_count)} prompts using ${fN(tokIn+tokOut)} tokens ($${n(t.cost_usd).toFixed(2)}).
+        ${plus||minus?`Changed ${n(t.files_changed)} files (<span class="diff-a">+${fN(plus)}</span> <span class="diff-d">-${fN(minus)}</span> <span class="diff-m">~${fN(mod)}</span> lines).`:''}
+        ${n(t.oracle_used)?'Oracle was consulted.':''}
+        Context: ${pct}%. Ingest: ${esc(t.ingest_status||'-')}. Sync: ${esc(t.sync_status||'-')}.
       </div>
     </div>
+
+    ${plus||minus||mod?`
+    <div class="section-toggle" onclick="togSec(this)"><span class="chev">›</span> Code changes summary</div>
+    <div class="section-body">
+      ${n(t.files_changed)} files changed, <span class="diff-a">+${fN(plus)}</span> <span class="diff-d">-${fN(minus)}</span> <span class="diff-m">~${fN(mod)}</span> lines.
+      ${t.commit_sha?'Commit: <code>'+esc(t.commit_sha)+'</code>':''}
+    </div>`:''}
+
+    ${t.error_code?`
+    <div class="msg" style="margin-top:20px">
+      <div class="msg-av" style="background:#fef2f2">⚠️</div>
+      <div class="msg-body" style="color:#dc2626">
+        <strong>${esc(t.error_code)}</strong>: ${esc(t.error_detail||'')}
+      </div>
+    </div>`:''}
+
+    ${t.commit_sha?`
+    <div class="shell-card" onclick="tog(this)">
+      <code>$ git log --oneline -1</code>
+      <span>→ ${esc(t.commit_sha?.slice(0,7)||'')}</span>
+      <span class="tool-chev">⬍</span>
+    </div>
+    <div class="tool-body">${esc(t.commit_sha)}</div>`:''}
   `;
 
-  // Sidebar
+  // ── SIDEBAR ──
   document.getElementById('sidebarCol').innerHTML=`
-    <div class="sb-badge">ud83dudd17 ${esc(t.status||'unknown')}</div>
-    <div class="sb-title">Thread</div>
-    <div class="sb-row"><span class="sb-icon">ud83dudcc5</span><span class="sb-val">${ago(t.ended_at)}</span></div>
-    <div class="sb-row"><span class="sb-icon">ud83dudcc1</span><span class="sb-val"><a href="https://github.com/${esc(t.repo)}" target="_blank">${esc(t.repo||'-')}</a></span></div>
-    <div class="sb-row"><span class="sb-icon">ud83dudd00</span><span class="sb-val">${esc(t.branch||'-')}</span></div>
-    <div class="sb-row"><span class="sb-icon">ud83eudde0</span><span class="sb-val">${esc(t.mode||'-')}</span></div>
-    <div class="sb-row"><span class="sb-icon">ud83dudcb0</span><span class="sb-val">$${n(t.cost_usd).toFixed(2)}${t.cost_is_estimated?' (est.)':''}</span></div>
-    <div class="sb-row"><span class="sb-icon">ud83dudcbb</span><span class="sb-val">${esc(t.interface||'CLI')}</span></div>
-    <div class="sb-row"><span class="sb-icon">ud83dudcac</span><span class="sb-val">${n(t.prompt_count)} prompts</span></div>
-    <div class="sb-row"><span class="sb-icon">ud83dudcca</span><span class="sb-val">${n(t.context_used_pct).toFixed(1)}%</span></div>
-    <div class="sb-row"><span class="sb-icon">u23f1ufe0f</span><span class="sb-val">Worked for ${fD(t.duration_sec)}</span></div>
-    <div class="sb-row"><span class="sb-icon">ud83dudcdd</span><span class="sb-val"><span class="diff-a">+${fN(plus)}</span> <span class="diff-d">-${fN(minus)}</span> <span class="diff-m">~${fN(mod)}</span> lines</span></div>
-    ${n(t.oracle_used)?'<div class="sb-row"><span class="sb-icon">ud83dudd2e</span><span class="sb-val">Uses Oracle</span></div>':''}
-
-    <div class="sb-section">
-      <div class="sb-label-title">Share</div>
-      <div class="url-box">
-        <a href="${esc(url)}">${esc(url)}</a>
-        <button onclick="navigator.clipboard.writeText('${esc(url)}');this.textContent='\u2713';setTimeout(()=>this.textContent='\ud83d\udccb',1200)">ud83dudccb</button>
-      </div>
+    <div class="sb-top">
+      <div class="sb-link">${I.link} ${esc(t.status||'completed')}</div>
+      <div class="sb-dots">···</div>
     </div>
 
-    <div class="sb-section">
-      <div class="sb-label-title">Open in CLI</div>
-      <div class="cli-box">
-        <span>cloudmem thread show ${esc(t.thread_id?.slice(0,20)||'')}u2026</span>
-        <button onclick="navigator.clipboard.writeText('cloudmem thread show ${esc(t.thread_id)}');this.textContent='\u2713';setTimeout(()=>this.textContent='\ud83d\udccb',1200)">ud83dudccb</button>
+    <div class="sb-heading">Thread</div>
+    <div class="sb-row">${I.cal}<span class="val">${ago(t.ended_at)}</span></div>
+    <div class="sb-row">${I.repo}<a href="https://github.com/${esc(t.repo)}" target="_blank">${esc(t.repo||'-')}</a></div>
+    <div class="sb-row">${I.branch}<span class="val">${esc(t.branch||'-')}</span></div>
+    <div class="sb-row">${I.brain}<span class="val">${esc(t.mode||'-')}</span></div>
+    <div class="sb-row">${I.dollar}<span class="val">$${n(t.cost_usd).toFixed(2)}${t.cost_is_estimated?' (est.)':''}</span></div>
+    <div class="sb-row">${I.monitor}<span class="val">${esc(t.interface||'CLI')}</span></div>
+    <div class="sb-row">${I.chat}<span class="val">${n(t.prompt_count)} prompts</span><span class="av-small"></span></div>
+    <div class="sb-row">${I.check}<span class="val">${pct}% of ${fN(tokIn+tokOut)}</span>${I.eye}</div>
+    <div class="sb-row">${I.clock}<span class="val">Worked for ${fD(t.duration_sec)}</span></div>
+    <div class="sb-row">${I.code}<span class="val"><span class="diff-a">+${fN(plus)}</span> <span class="diff-d">-${fN(minus)}</span> <span class="diff-m">~${fN(mod)}</span> lines</span></div>
+    ${n(t.oracle_used)?`<div class="sb-row">${I.eye}<span class="val">Uses Oracle</span></div>`:''}
+
+    <div class="sb-labels">
+      <div class="sb-labels-title">Labels</div>
+      <div class="sb-labels-row"><span style="font-size:14px;color:#ccc">+</span> ${I.tag}</div>
+    </div>
+
+    <div class="sb-cli">
+      <div class="sb-cli-title">Open in CLI</div>
+      <div class="sb-cli-box">
+        <span>cloudmem thread show ${esc(t.thread_id?.slice(0,12)||'')}…</span>
+        <button onclick="navigator.clipboard.writeText('cloudmem thread show ${esc(t.thread_id)}');this.innerHTML='✓';setTimeout(()=>this.innerHTML=I.copy,1200)">${I.copy}</button>
       </div>
     </div>
   `;
@@ -331,8 +367,8 @@ function renderDetail(t){
 // Load
 async function loadThreads(){
   const b=base();
-  if(!b){document.getElementById('listBody').innerHTML='<div class="empty"><div class="e-icon">u2699ufe0f</div>Click Settings to set your API URL</div>';return;}
-  document.getElementById('listBody').innerHTML='<div class="empty"><div class="e-icon">u23f3</div>Loadingu2026</div>';
+  if(!b){document.getElementById('listBody').innerHTML='<div style="text-align:center;padding:40px;color:#ccc">Click Settings to set API URL</div>';return;}
+  document.getElementById('listBody').innerHTML='<div style="text-align:center;padding:40px;color:#ccc">Loading…</div>';
   try{
     const res=await fetch(`${b}/v1/threads?limit=200`);
     const data=await res.json();
@@ -340,13 +376,10 @@ async function loadThreads(){
     filtered=[...allRows];
     fillFilters();
     renderList();
-  }catch(e){
-    document.getElementById('listBody').innerHTML=`<div class="empty"><div class="e-icon">u274c</div>${esc(e.message)}</div>`;
-  }
+  }catch(e){document.getElementById('listBody').innerHTML=`<div style="text-align:center;padding:40px;color:#dc2626">${esc(e.message)}</div>`;}
 }
 
-// Boot: load threads then route
-if(base()) loadThreads().then(()=>route()); else route();
+if(base())loadThreads().then(()=>route());else route();
 </script>
 </body>
 </html>
