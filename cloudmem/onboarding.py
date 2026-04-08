@@ -19,6 +19,7 @@ Usage:
 from pathlib import Path
 from cloudmem.entity_registry import EntityRegistry
 from cloudmem.entity_detector import detect_entities, scan_for_detection
+from cloudmem.paths import get_cloudmem_home
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -270,8 +271,8 @@ def _generate_aaak_bootstrap(
     Generate AAAK entity registry + critical facts bootstrap from onboarding data.
     These files teach the AI about the user's world from session one.
     """
-    mempalace_dir = Path(config_dir) if config_dir else Path.home() / ".mempalace"
-    mempalace_dir.mkdir(parents=True, exist_ok=True)
+    cloudmem_dir = Path(config_dir) if config_dir else get_cloudmem_home()
+    cloudmem_dir.mkdir(parents=True, exist_ok=True)
 
     # Build AAAK entity codes (first 3 letters of name, uppercase)
     entity_codes = {}
@@ -312,7 +313,7 @@ def _generate_aaak_bootstrap(
         ]
     )
 
-    (mempalace_dir / "aaak_entities.md").write_text("\n".join(registry_lines))
+    (cloudmem_dir / "aaak_entities.md").write_text("\n".join(registry_lines))
 
     # Critical facts bootstrap (pre-palace — before any mining)
     facts_lines = [
@@ -359,7 +360,7 @@ def _generate_aaak_bootstrap(
         ]
     )
 
-    (mempalace_dir / "critical_facts.md").write_text("\n".join(facts_lines))
+    (cloudmem_dir / "critical_facts.md").write_text("\n".join(facts_lines))
 
 
 def run_onboarding(
@@ -442,8 +443,9 @@ def run_onboarding(
     print(f"  {registry.summary()}")
     print(f"\n  Wings: {', '.join(wings)}")
     print(f"\n  Registry saved to: {registry._path}")
-    print("\n  AAAK entity registry: ~/.mempalace/aaak_entities.md")
-    print("  Critical facts bootstrap: ~/.mempalace/critical_facts.md")
+    home = Path(config_dir) if config_dir else get_cloudmem_home()
+    print(f"\n  AAAK entity registry: {home / 'aaak_entities.md'}")
+    print(f"  Critical facts bootstrap: {home / 'critical_facts.md'}")
     print("\n  Your AI will know your world from the first session.")
     print()
 

@@ -10,11 +10,15 @@ Stores verbatim chunks as drawers. No summaries. Ever.
 import os
 import sys
 import hashlib
+import subprocess
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 
-import chromadb
+
+from cloudmem.storage import get_drawer_collection, iter_collection_rows
+
+PROJECT_INGEST_MODE = "projects"
 
 READABLE_EXTENSIONS = {
     ".txt",
@@ -56,6 +60,24 @@ SKIP_DIRS = {
 CHUNK_SIZE = 800  # chars per drawer
 CHUNK_OVERLAP = 100  # overlap between chunks
 MIN_CHUNK_SIZE = 50  # skip tiny chunks
+DEFAULT_MAX_FILE_BYTES = 1024 * 1024
+
+SKIP_FILENAMES = {
+    "mempalace.yaml",
+    "mempalace.yml",
+    "mempal.yaml",
+    "mempal.yml",
+    ".gitignore",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lock",
+    "bun.lockb",
+    "poetry.lock",
+    "pdm.lock",
+    "Pipfile.lock",
+    "Cargo.lock",
+}
 
 
 # =============================================================================
@@ -181,28 +203,130 @@ def chunk_text(content: str, source_file: str) -> list:
 
 
 def get_collection(palace_path: str):
-    os.makedirs(palace_path, exist_ok=True)
-    client = chromadb.PersistentClient(path=palace_path)
-    try:
-        return client.get_collection("mempalace_drawers")
-    except Exception:
-        return client.create_collection("mempalace_drawers")
+    return get_drawer_collection(palace_path=Path(palace_path))
 
 
-def file_already_mined(collection, source_file: str) -> bool:
-    """Fast check: has this file been filed before?"""
+def relative_source_file(filepath: Path, project_path: Path) -> str:
+    return filepath.relative_to(project_path).as_posix()
+
+
+def content_sha256(content: str) -> str:
+    return hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()[:16]
+
+
+def get_file_drawers(collection, source_file: str) -> tuple[list, list]:
     try:
-        results = collection.get(where={"source_file": source_file}, limit=1)
-        return len(results.get("ids", [])) > 0
+        results = collection.get(where={"source_file": source_file}, include=["metadatas"])
+        return results.get("ids", []), results.get("metadatas", [])
     except Exception:
+        return [], []
+
+
+def file_already_mined(collection, source_file: str, sha256: str | None = None) -> bool:
+    """Fast check: has this exact file content already been filed?"""
+    ids, metas = get_file_drawers(collection, source_file)
+    if not ids:
+        return False
+    if sha256 is None:
+        return True
+    return any(meta.get("content_sha256") == sha256 for meta in metas if meta)
+
+
+def delete_file_drawers(collection, source_file: str) -> int:
+    ids, _ = get_file_drawers(collection, source_file)
+    if not ids:
+        return 0
+    collection.delete(ids=ids)
+    return len(ids)
+
+
+def get_max_file_bytes() -> int:
+    raw = os.environ.get("CLOUDMEM_MAX_FILE_BYTES") or os.environ.get("MEMPALACE_MAX_FILE_BYTES")
+    if raw:
+        try:
+            value = int(raw)
+            if value > 0:
+                return value
+        except ValueError:
+            pass
+    return DEFAULT_MAX_FILE_BYTES
+
+
+def _is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
         return False
 
 
+def _should_scan_file(filepath: Path, max_file_bytes: int) -> bool:
+    if not filepath.is_file():
+        return False
+    if filepath.name in SKIP_FILENAMES:
+        return False
+    if filepath.suffix.lower() not in READABLE_EXTENSIONS:
+        return False
+    try:
+        return filepath.stat().st_size <= max_file_bytes
+    except OSError:
+        return False
+
+
+def _scan_project_with_git(project_path: Path, max_file_bytes: int) -> list[Path]:
+    try:
+        repo_root = subprocess.run(
+            ["git", "-C", str(project_path), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        output = subprocess.run(
+            ["git", "-C", str(project_path), "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+            capture_output=True,
+            check=True,
+        ).stdout
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return []
+
+    repo_path = Path(repo_root)
+    files = []
+    for raw_path in output.split(b"\0"):
+        if not raw_path:
+            continue
+        filepath = repo_path / raw_path.decode("utf-8", errors="surrogateescape")
+        if not _is_within(filepath, project_path):
+            continue
+        if _should_scan_file(filepath, max_file_bytes):
+            files.append(filepath)
+    return sorted(files)
+
+
+def _scan_project_walk(project_path: Path, max_file_bytes: int) -> list[Path]:
+    files = []
+    for root, dirs, filenames in os.walk(project_path):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for filename in filenames:
+            filepath = Path(root) / filename
+            if _should_scan_file(filepath, max_file_bytes):
+                files.append(filepath)
+    return sorted(files)
+
+
 def add_drawer(
-    collection, wing: str, room: str, content: str, source_file: str, chunk_index: int, agent: str
+    collection,
+    wing: str,
+    room: str,
+    content: str,
+    source_file: str,
+    chunk_index: int,
+    agent: str,
+    sha256: str,
 ):
     """Add one drawer to the palace."""
-    drawer_id = f"drawer_{wing}_{room}_{hashlib.md5((source_file + str(chunk_index)).encode()).hexdigest()[:16]}"
+    drawer_id = (
+        f"drawer_{wing}_{room}_{hashlib.md5((source_file + sha256 + str(chunk_index)).encode()).hexdigest()[:16]}"
+    )
     try:
         collection.add(
             documents=[content],
@@ -215,6 +339,8 @@ def add_drawer(
                     "chunk_index": chunk_index,
                     "added_by": agent,
                     "filed_at": datetime.now().isoformat(),
+                    "content_sha256": sha256,
+                    "ingest_mode": PROJECT_INGEST_MODE,
                 }
             ],
         )
@@ -238,29 +364,36 @@ def process_file(
     rooms: list,
     agent: str,
     dry_run: bool,
-) -> int:
+) -> dict:
     """Read, chunk, route, and file one file. Returns drawer count."""
 
-    # Skip if already filed
-    source_file = str(filepath)
-    if not dry_run and file_already_mined(collection, source_file):
-        return 0
+    source_file = relative_source_file(filepath, project_path)
 
     try:
         content = filepath.read_text(encoding="utf-8", errors="replace")
     except Exception:
-        return 0
+        return {"drawers_added": 0, "status": "unreadable", "room": None}
 
     content = content.strip()
+    sha256 = content_sha256(content) if content else ""
+
+    if not dry_run and file_already_mined(collection, source_file, sha256):
+        room = detect_room(filepath, content, rooms, project_path)
+        return {"drawers_added": 0, "status": "unchanged", "room": room}
+
     if len(content) < MIN_CHUNK_SIZE:
-        return 0
+        if not dry_run:
+            delete_file_drawers(collection, source_file)
+        return {"drawers_added": 0, "status": "too_small", "room": None}
 
     room = detect_room(filepath, content, rooms, project_path)
     chunks = chunk_text(content, source_file)
 
     if dry_run:
         print(f"    [DRY RUN] {filepath.name} → room:{room} ({len(chunks)} drawers)")
-        return len(chunks)
+        return {"drawers_added": len(chunks), "status": "processed", "room": room}
+
+    delete_file_drawers(collection, source_file)
 
     drawers_added = 0
     for chunk in chunks:
@@ -272,11 +405,12 @@ def process_file(
             source_file=source_file,
             chunk_index=chunk["chunk_index"],
             agent=agent,
+            sha256=sha256,
         )
         if added:
             drawers_added += 1
 
-    return drawers_added
+    return {"drawers_added": drawers_added, "status": "processed", "room": room}
 
 
 # =============================================================================
@@ -287,24 +421,11 @@ def process_file(
 def scan_project(project_dir: str) -> list:
     """Return list of all readable file paths."""
     project_path = Path(project_dir).expanduser().resolve()
-    files = []
-    for root, dirs, filenames in os.walk(project_path):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
-        for filename in filenames:
-            filepath = Path(root) / filename
-            if filepath.suffix.lower() in READABLE_EXTENSIONS:
-                # Skip config files
-                if filename in (
-                    "mempalace.yaml",
-                    "mempalace.yml",
-                    "mempal.yaml",
-                    "mempal.yml",
-                    ".gitignore",
-                    "package-lock.json",
-                ):
-                    continue
-                files.append(filepath)
-    return files
+    max_file_bytes = get_max_file_bytes()
+    files = _scan_project_with_git(project_path, max_file_bytes)
+    if files:
+        return files
+    return _scan_project_walk(project_path, max_file_bytes)
 
 
 # =============================================================================
@@ -353,7 +474,7 @@ def mine(
     room_counts = defaultdict(int)
 
     for i, filepath in enumerate(files, 1):
-        drawers = process_file(
+        result = process_file(
             filepath=filepath,
             project_path=project_path,
             collection=collection,
@@ -362,12 +483,16 @@ def mine(
             agent=agent,
             dry_run=dry_run,
         )
-        if drawers == 0 and not dry_run:
+        drawers = result["drawers_added"]
+        status = result["status"]
+        room = result.get("room")
+
+        if status == "unchanged" and not dry_run:
             files_skipped += 1
         else:
             total_drawers += drawers
-            room = detect_room(filepath, "", rooms, project_path)
-            room_counts[room] += 1
+            if room:
+                room_counts[room] += 1
             if not dry_run:
                 print(f"  ✓ [{i:4}/{len(files)}] {filepath.name[:50]:50} +{drawers}")
 
@@ -391,23 +516,21 @@ def mine(
 def status(palace_path: str):
     """Show what's been filed in the palace."""
     try:
-        client = chromadb.PersistentClient(path=palace_path)
-        col = client.get_collection("mempalace_drawers")
+        col = get_drawer_collection(palace_path=Path(palace_path), create=False)
     except Exception:
         print(f"\n  No palace found at {palace_path}")
         print("  Run: mempalace init <dir> then mempalace mine <dir>")
         return
 
-    # Count by wing and room
-    r = col.get(limit=10000, include=["metadatas"])
-    metas = r["metadatas"]
-
     wing_rooms = defaultdict(lambda: defaultdict(int))
-    for m in metas:
+    total = 0
+    for row in iter_collection_rows(col, include=["metadatas"]):
+        m = row.get("metadata") or {}
         wing_rooms[m.get("wing", "?")][m.get("room", "?")] += 1
+        total += 1
 
     print(f"\n{'=' * 55}")
-    print(f"  MemPalace Status — {len(metas)} drawers")
+    print(f"  MemPalace Status — {total} drawers")
     print(f"{'=' * 55}\n")
     for wing, rooms in sorted(wing_rooms.items()):
         print(f"  WING: {wing}")

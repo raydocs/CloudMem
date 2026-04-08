@@ -22,13 +22,18 @@ import json
 import logging
 import hashlib
 from datetime import datetime
+from pathlib import Path
+
+# TOOLS registry: 24 mempalace_* tools + 24 cloudmem_* aliases = 48 total
+# Update this comment when adding/removing tools.
 
 from .config import MempalaceConfig
 from .searcher import search_memories
 from .palace_graph import traverse, find_tunnels, graph_stats
-import chromadb
-
 from .knowledge_graph import KnowledgeGraph
+from .__init__ import __version__
+from .storage import get_drawer_collection, iter_collection_rows
+from .thread_ledger import list_threads, load_thread, load_thread_events
 
 _kg = KnowledgeGraph()
 
@@ -41,10 +46,11 @@ _config = MempalaceConfig()
 def _get_collection(create=False):
     """Return the ChromaDB collection, or None on failure."""
     try:
-        client = chromadb.PersistentClient(path=_config.palace_path)
-        if create:
-            return client.get_or_create_collection(_config.collection_name)
-        return client.get_collection(_config.collection_name)
+        return get_drawer_collection(
+            palace_path=Path(_config.palace_path),
+            collection_name=_config.collection_name,
+            create=create,
+        )
     except Exception:
         return None
 
@@ -57,6 +63,20 @@ def _no_palace():
     }
 
 
+def _read_error(code: str, detail: str, **extra):
+    payload = {
+        "error": {"code": code, "detail": detail},
+        "palace_path": _config.palace_path,
+    }
+    payload.update(extra)
+    return payload
+
+
+def _iter_metadatas(col, **kwargs):
+    for row in iter_collection_rows(col, include=["metadatas"], **kwargs):
+        yield row.get("metadata") or {}
+
+
 # ==================== READ TOOLS ====================
 
 
@@ -64,18 +84,25 @@ def tool_status():
     col = _get_collection()
     if not col:
         return _no_palace()
-    count = col.count()
+
+    try:
+        count = col.count()
+    except Exception as e:
+        return _read_error("collection_count_failed", str(e))
+
     wings = {}
     rooms = {}
     try:
-        all_meta = col.get(include=["metadatas"])["metadatas"]
-        for m in all_meta:
+        for m in _iter_metadatas(col):
             w = m.get("wing", "unknown")
             r = m.get("room", "unknown")
             wings[w] = wings.get(w, 0) + 1
             rooms[r] = rooms.get(r, 0) + 1
-    except Exception:
-        pass
+    except Exception as e:
+        err = _read_error("metadata_read_failed", str(e))
+        err["total_drawers"] = count
+        return err
+
     return {
         "total_drawers": count,
         "wings": wings,
@@ -123,14 +150,14 @@ def tool_list_wings():
     col = _get_collection()
     if not col:
         return _no_palace()
+
     wings = {}
     try:
-        all_meta = col.get(include=["metadatas"])["metadatas"]
-        for m in all_meta:
+        for m in _iter_metadatas(col):
             w = m.get("wing", "unknown")
             wings[w] = wings.get(w, 0) + 1
-    except Exception:
-        pass
+    except Exception as e:
+        return _read_error("metadata_read_failed", str(e))
     return {"wings": wings}
 
 
@@ -138,17 +165,20 @@ def tool_list_rooms(wing: str = None):
     col = _get_collection()
     if not col:
         return _no_palace()
+
+    kwargs = {}
+    if wing:
+        kwargs["where"] = {"wing": wing}
+
     rooms = {}
     try:
-        kwargs = {"include": ["metadatas"]}
-        if wing:
-            kwargs["where"] = {"wing": wing}
-        all_meta = col.get(**kwargs)["metadatas"]
-        for m in all_meta:
+        for m in _iter_metadatas(col, **kwargs):
             r = m.get("room", "unknown")
             rooms[r] = rooms.get(r, 0) + 1
-    except Exception:
-        pass
+    except Exception as e:
+        err = _read_error("metadata_read_failed", str(e))
+        err["wing"] = wing or "all"
+        return err
     return {"wing": wing or "all", "rooms": rooms}
 
 
@@ -156,17 +186,17 @@ def tool_get_taxonomy():
     col = _get_collection()
     if not col:
         return _no_palace()
+
     taxonomy = {}
     try:
-        all_meta = col.get(include=["metadatas"])["metadatas"]
-        for m in all_meta:
+        for m in _iter_metadatas(col):
             w = m.get("wing", "unknown")
             r = m.get("room", "unknown")
             if w not in taxonomy:
                 taxonomy[w] = {}
             taxonomy[w][r] = taxonomy[w].get(r, 0) + 1
-    except Exception:
-        pass
+    except Exception as e:
+        return _read_error("metadata_read_failed", str(e))
     return {"taxonomy": taxonomy}
 
 
@@ -460,6 +490,42 @@ def handle_mempalace_pull():
     return result.to_dict()
 
 
+def tool_thread_list(limit: int = 20):
+    rows = list_threads(limit=max(1, int(limit)))
+    compact = []
+    for row in rows:
+        compact.append(
+            {
+                "thread_id": row.get("thread_id", ""),
+                "session_id": row.get("session_id", ""),
+                "repo": row.get("repo", ""),
+                "branch": row.get("branch", ""),
+                "mode": row.get("mode", ""),
+                "status": row.get("status", ""),
+                "duration_sec": row.get("duration_sec", 0),
+                "prompt_count": row.get("prompt_count", 0),
+                "context_used_pct": row.get("context_used_pct", 0.0),
+                "cost_usd": row.get("cost_usd", 0.0),
+                "oracle_used": row.get("oracle_used", False),
+                "lines_added": row.get("lines_added", 0),
+                "lines_deleted": row.get("lines_deleted", 0),
+                "lines_modified": row.get("lines_modified", 0),
+                "ended_at": row.get("ended_at", ""),
+            }
+        )
+    return {"threads": compact, "count": len(compact)}
+
+
+def tool_thread_show(thread_id: str, include_events: bool = False, event_limit: int = 200):
+    row = load_thread(thread_id)
+    if row is None:
+        return {"error": {"code": "thread_not_found", "detail": f"Thread not found: {thread_id}"}}
+    payload = {"thread": row}
+    if include_events:
+        payload["events"] = load_thread_events(thread_id, limit=max(1, int(event_limit)))
+    return payload
+
+
 # ==================== MCP PROTOCOL ====================
 
 TOOLS = {
@@ -741,7 +807,41 @@ TOOLS = {
         },
         "handler": handle_mempalace_pull,
     },
+    "mempalace_thread_list": {
+        "description": "List recent AMP-style thread ledger rows.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Max rows (default 20)"}
+            },
+            "required": [],
+        },
+        "handler": tool_thread_list,
+    },
+    "mempalace_thread_show": {
+        "description": "Show full thread ledger payload by thread_id.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "thread_id": {"type": "string", "description": "Thread identifier"},
+                "include_events": {"type": "boolean", "description": "Include event timeline (default false)"},
+                "event_limit": {"type": "integer", "description": "Max events when include_events=true (default 200)"}
+            },
+            "required": ["thread_id"],
+        },
+        "handler": tool_thread_show,
+    },
 }
+
+# After defining all mempalace_* tools, auto-generate cloudmem_* aliases
+_ALIAS_TOOLS = {}
+for _name, _tool in TOOLS.items():
+    if _name.startswith("mempalace_"):
+        _alias = dict(_tool)
+        _alias_name = _name.replace("mempalace_", "cloudmem_", 1)
+        _alias["description"] = _alias["description"] + " (alias)"
+        _ALIAS_TOOLS[_alias_name] = _alias
+TOOLS = TOOLS | _ALIAS_TOOLS
 
 
 def handle_request(request):
@@ -756,7 +856,7 @@ def handle_request(request):
             "result": {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "mempalace", "version": "2.0.0"},
+                "serverInfo": {"name": "mempalace", "version": __version__},
             },
         }
     elif method == "notifications/initialized":
@@ -775,6 +875,9 @@ def handle_request(request):
     elif method == "tools/call":
         tool_name = params.get("name")
         tool_args = params.get("arguments", {})
+        # normalize alias: cloudmem_* -> mempalace_*
+        if tool_name and tool_name.startswith("cloudmem_"):
+            tool_name = tool_name.replace("cloudmem_", "mempalace_", 1)
         if tool_name not in TOOLS:
             return {
                 "jsonrpc": "2.0",

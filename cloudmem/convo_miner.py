@@ -15,9 +15,8 @@ from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 
-import chromadb
-
 from .normalize import normalize
+from .storage import get_drawer_collection
 
 
 # File types that might contain conversations
@@ -42,6 +41,7 @@ SKIP_DIRS = {
 }
 
 MIN_CHUNK_SIZE = 30
+CONVO_INGEST_MODE = "convos"
 
 
 # =============================================================================
@@ -210,20 +210,36 @@ def detect_convo_room(content: str) -> str:
 
 
 def get_collection(palace_path: str):
-    os.makedirs(palace_path, exist_ok=True)
-    client = chromadb.PersistentClient(path=palace_path)
-    try:
-        return client.get_collection("mempalace_drawers")
-    except Exception:
-        return client.create_collection("mempalace_drawers")
+    return get_drawer_collection(palace_path=Path(palace_path))
 
 
-def file_already_mined(collection, source_file: str) -> bool:
+def content_sha256(content: str) -> str:
+    return hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()[:16]
+
+
+def get_file_drawers(collection, source_file: str) -> tuple[list, list]:
     try:
-        results = collection.get(where={"source_file": source_file}, limit=1)
-        return len(results.get("ids", [])) > 0
+        results = collection.get(where={"source_file": source_file}, include=["metadatas"])
+        return results.get("ids", []), results.get("metadatas", [])
     except Exception:
+        return [], []
+
+
+def file_already_mined(collection, source_file: str, sha256: str | None = None) -> bool:
+    ids, metas = get_file_drawers(collection, source_file)
+    if not ids:
         return False
+    if sha256 is None:
+        return True
+    return any(meta.get("content_sha256") == sha256 for meta in metas if meta)
+
+
+def delete_file_drawers(collection, source_file: str) -> int:
+    ids, _ = get_file_drawers(collection, source_file)
+    if not ids:
+        return 0
+    collection.delete(ids=ids)
+    return len(ids)
 
 
 def mine_convo_file(
@@ -251,15 +267,19 @@ def mine_convo_file(
     source_file = str(filepath)
     collection = get_collection(palace_path) if not dry_run else None
 
-    if not dry_run and file_already_mined(collection, source_file):
-        return {"drawers_added": 0, "wing": wing, "room": None, "skipped": True}
-
     try:
         content = normalize(source_file)
     except Exception:
         return {"drawers_added": 0, "wing": wing, "room": None, "skipped": False, "error": "normalize_failed"}
 
+    sha256 = content_sha256(content) if content else ""
+
+    if not dry_run and file_already_mined(collection, source_file, sha256):
+        return {"drawers_added": 0, "wing": wing, "room": None, "skipped": True}
+
     if not content or len(content.strip()) < MIN_CHUNK_SIZE:
+        if not dry_run:
+            delete_file_drawers(collection, source_file)
         return {"drawers_added": 0, "wing": wing, "room": None, "skipped": False}
 
     if extract_mode == "general":
@@ -287,11 +307,21 @@ def mine_convo_file(
     if metadata_overrides:
         base_meta.update(metadata_overrides)
 
+    delete_file_drawers(collection, source_file)
+
     drawers_added = 0
     for chunk in chunks:
         chunk_room = chunk.get("memory_type", room) if extract_mode == "general" else room
-        drawer_id = f"drawer_{wing}_{chunk_room}_{hashlib.md5((source_file + str(chunk['chunk_index'])).encode()).hexdigest()[:16]}"
-        meta = {**base_meta, "room": chunk_room, "chunk_index": chunk["chunk_index"]}
+        drawer_id = (
+            f"drawer_{wing}_{chunk_room}_{hashlib.md5((source_file + sha256 + str(chunk['chunk_index'])).encode()).hexdigest()[:16]}"
+        )
+        meta = {
+            **base_meta,
+            "room": chunk_room,
+            "chunk_index": chunk["chunk_index"],
+            "content_sha256": sha256,
+            "ingest_mode": CONVO_INGEST_MODE,
+        }
         try:
             collection.add(documents=[chunk["content"]], ids=[drawer_id], metadatas=[meta])
             drawers_added += 1
@@ -374,18 +404,21 @@ def mine_convos(
     for i, filepath in enumerate(files, 1):
         source_file = str(filepath)
 
-        # Skip if already filed
-        if not dry_run and file_already_mined(collection, source_file):
-            files_skipped += 1
-            continue
-
         # Normalize format
         try:
             content = normalize(str(filepath))
         except Exception:
             continue
 
+        sha256 = content_sha256(content) if content else ""
+
+        if not dry_run and file_already_mined(collection, source_file, sha256):
+            files_skipped += 1
+            continue
+
         if not content or len(content.strip()) < MIN_CHUNK_SIZE:
+            if not dry_run:
+                delete_file_drawers(collection, source_file)
             continue
 
         # Chunk — either exchange pairs or general extraction
@@ -428,13 +461,17 @@ def mine_convos(
         if extract_mode != "general":
             room_counts[room] += 1
 
+        delete_file_drawers(collection, source_file)
+
         # File each chunk
         drawers_added = 0
         for chunk in chunks:
             chunk_room = chunk.get("memory_type", room) if extract_mode == "general" else room
             if extract_mode == "general":
                 room_counts[chunk_room] += 1
-            drawer_id = f"drawer_{wing}_{chunk_room}_{hashlib.md5((source_file + str(chunk['chunk_index'])).encode()).hexdigest()[:16]}"
+            drawer_id = (
+                f"drawer_{wing}_{chunk_room}_{hashlib.md5((source_file + sha256 + str(chunk['chunk_index'])).encode()).hexdigest()[:16]}"
+            )
             try:
                 collection.add(
                     documents=[chunk["content"]],
@@ -447,7 +484,8 @@ def mine_convos(
                             "chunk_index": chunk["chunk_index"],
                             "added_by": agent,
                             "filed_at": datetime.now().isoformat(),
-                            "ingest_mode": "convos",
+                            "content_sha256": sha256,
+                            "ingest_mode": CONVO_INGEST_MODE,
                             "extract_mode": extract_mode,
                         }
                     ],

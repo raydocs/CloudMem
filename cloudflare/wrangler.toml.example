@@ -1,0 +1,18 @@
+name = "cloudmem-thread-ledger"
+main = "worker.mjs"
+compatibility_date = "2026-04-07"
+
+[[d1_databases]]
+binding = "THREADS_DB"
+database_name = "cloudmem-threads"
+database_id = "<your-d1-id>"
+
+[[r2_buckets]]
+binding = "THREADS_R2"
+bucket_name = "cloudmem-threads"
+
+[vars]
+# Optional bearer auth
+THREAD_API_TOKEN = "<set-me>"
+# Optional HMAC for signed requests
+THREAD_HMAC_SECRET = "<set-me>"

@@ -22,6 +22,8 @@ import urllib.parse
 from pathlib import Path
 from typing import Optional
 
+from cloudmem.paths import get_entity_registry_path, legacy_fallback
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Common English words that could be confused with names
@@ -269,7 +271,7 @@ class EntityRegistry:
     """
     Persistent personal entity registry.
 
-    Stored at ~/.mempalace/entity_registry.json
+    Stored at ~/.cloudmem/entity_registry.json
     Schema:
     {
       "mode": "personal",   # work | personal | combo
@@ -291,7 +293,7 @@ class EntityRegistry:
     }
     """
 
-    DEFAULT_PATH = Path.home() / ".mempalace" / "entity_registry.json"
+    DEFAULT_PATH = legacy_fallback(get_entity_registry_path(), "entity_registry.json")
 
     def __init__(self, data: dict, path: Path):
         self._data = data

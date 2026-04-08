@@ -1,15 +1,22 @@
 """
 MemPalace configuration system.
 
-Priority: env vars > config file (~/.mempalace/config.json) > defaults
+Priority: env vars > config file (~/.cloudmem/config.json) > defaults
 """
 
 import json
 import os
 from pathlib import Path
 
-DEFAULT_CLOUDMEM_HOME = os.path.expanduser("~/.cloudmem")
-DEFAULT_PALACE_PATH = os.path.join(DEFAULT_CLOUDMEM_HOME, "palace")
+from cloudmem.paths import (
+    get_cloudmem_home as get_unified_cloudmem_home,
+    get_config_path,
+    get_palace_path as get_unified_palace_path,
+    get_people_map_path,
+)
+
+DEFAULT_CLOUDMEM_HOME = str(get_unified_cloudmem_home())
+DEFAULT_PALACE_PATH = str(get_unified_palace_path())
 DEFAULT_COLLECTION_NAME = "mempalace_drawers"
 
 
@@ -18,12 +25,12 @@ def get_palace_path() -> str:
     env_val = os.environ.get("CLOUDMEM_PALACE_PATH") or os.environ.get("MEMPALACE_PALACE_PATH")
     if env_val:
         return env_val
-    return DEFAULT_PALACE_PATH
+    return str(get_unified_palace_path())
 
 
 def get_cloudmem_home() -> str:
     """Return the CloudMem storage root directory."""
-    return os.environ.get("CLOUDMEM_HOME", DEFAULT_CLOUDMEM_HOME)
+    return str(get_unified_cloudmem_home())
 
 
 DEFAULT_TOPIC_WINGS = [
@@ -88,13 +95,13 @@ class MempalaceConfig:
 
         Args:
             config_dir: Override config directory (useful for testing).
-                        Defaults to ~/.mempalace.
+                        Defaults to ~/.cloudmem.
         """
-        self._config_dir = (
-            Path(config_dir) if config_dir else Path(os.path.expanduser("~/.mempalace"))
+        self._config_file = Path(config_dir) / "config.json" if config_dir else get_config_path()
+        self._config_dir = self._config_file.parent
+        self._people_map_file = (
+            Path(config_dir) / "people_map.json" if config_dir else get_people_map_path()
         )
-        self._config_file = self._config_dir / "config.json"
-        self._people_map_file = self._config_dir / "people_map.json"
         self._file_config = {}
 
         if self._config_file.exists():
@@ -107,10 +114,14 @@ class MempalaceConfig:
     @property
     def palace_path(self):
         """Path to the memory palace data directory."""
-        env_val = os.environ.get("MEMPALACE_PALACE_PATH") or os.environ.get("MEMPAL_PALACE_PATH")
+        env_val = (
+            os.environ.get("CLOUDMEM_PALACE_PATH")
+            or os.environ.get("MEMPALACE_PALACE_PATH")
+            or os.environ.get("MEMPAL_PALACE_PATH")
+        )
         if env_val:
             return env_val
-        return self._file_config.get("palace_path", DEFAULT_PALACE_PATH)
+        return self._file_config.get("palace_path", str(get_unified_palace_path()))
 
     @property
     def collection_name(self):
@@ -143,7 +154,7 @@ class MempalaceConfig:
         self._config_dir.mkdir(parents=True, exist_ok=True)
         if not self._config_file.exists():
             default_config = {
-                "palace_path": DEFAULT_PALACE_PATH,
+                "palace_path": str(get_unified_palace_path()),
                 "collection_name": DEFAULT_COLLECTION_NAME,
                 "topic_wings": DEFAULT_TOPIC_WINGS,
                 "hall_keywords": DEFAULT_HALL_KEYWORDS,

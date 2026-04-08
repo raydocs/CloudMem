@@ -1,0 +1,6 @@
+WORKER_NAME=cloudmem-thread-ledger
+WORKER_URL=
+D1_DATABASE=cloudmem-threads
+D1_DATABASE_ID=4633c0cc-28d2-4660-aa75-b2b0eebcb6b0
+R2_ENABLED=1
+R2_BUCKET=cloudmem-threads

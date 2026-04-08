@@ -1,4 +1,4 @@
-"""MemPalace — Give your AI a memory. No API key required."""
+"""CloudMem — Give your AI a memory. No API key required."""
 
 __version__ = "2.0.0"
 

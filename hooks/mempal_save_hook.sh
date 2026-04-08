@@ -53,8 +53,14 @@
 # === CONFIGURATION ===
 
 SAVE_INTERVAL=15  # Save every N human messages (adjust to taste)
-STATE_DIR="$HOME/.mempalace/hook_state"
-mkdir -p "$STATE_DIR"
+LEGACY_STATE_DIR="$HOME/.mempalace/hook_state"
+STATE_BASE="${CLOUDMEM_HOME:-$HOME/.cloudmem}"
+STATE_DIR="$STATE_BASE/hook_state"
+
+if ! mkdir -p "$STATE_DIR" 2>/dev/null; then
+    STATE_DIR="$LEGACY_STATE_DIR"
+    mkdir -p "$STATE_DIR"
+fi
 
 # Optional: set to the directory you want auto-ingested on each save trigger.
 # Example: MEMPAL_DIR="$HOME/conversations"
@@ -105,14 +111,17 @@ fi
 
 # Track last save point for this session
 LAST_SAVE_FILE="$STATE_DIR/${SESSION_ID}_last_save"
+LEGACY_LAST_SAVE_FILE="$LEGACY_STATE_DIR/${SESSION_ID}_last_save"
 LAST_SAVE=0
 if [ -f "$LAST_SAVE_FILE" ]; then
     LAST_SAVE=$(cat "$LAST_SAVE_FILE")
+elif [ -f "$LEGACY_LAST_SAVE_FILE" ]; then
+    LAST_SAVE=$(cat "$LEGACY_LAST_SAVE_FILE")
 fi
 
 SINCE_LAST=$((EXCHANGE_COUNT - LAST_SAVE))
 
-# Log for debugging (check ~/.mempalace/hook_state/hook.log)
+# Log for debugging (check ~/.cloudmem/hook_state/hook.log)
 echo "[$(date '+%H:%M:%S')] Session $SESSION_ID: $EXCHANGE_COUNT exchanges, $SINCE_LAST since last save" >> "$STATE_DIR/hook.log"
 
 # Time to save?
@@ -126,7 +135,7 @@ if [ "$SINCE_LAST" -ge "$SAVE_INTERVAL" ] && [ "$EXCHANGE_COUNT" -gt 0 ]; then
     if [ -n "$MEMPAL_DIR" ] && [ -d "$MEMPAL_DIR" ]; then
         SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         REPO_DIR="$(dirname "$SCRIPT_DIR")"
-        python3 -m mempalace mine "$MEMPAL_DIR" >> "$STATE_DIR/hook.log" 2>&1 &
+        python3 -m cloudmem mine "$MEMPAL_DIR" >> "$STATE_DIR/hook.log" 2>&1 &
     fi
 
     # Block the AI and tell it to save

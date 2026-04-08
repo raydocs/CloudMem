@@ -1,20 +1,27 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "cloudmem"
-version = "1.0.0"
+version = "2.0.0"
 description = "AI memory with cloud sync — AAAK compression + GitHub backup"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 dependencies = [
-    "chromadb>=0.4.0",
+    "chromadb>=0.4.0,<1.0",
     "pyyaml>=6.0",
 ]
 
 [project.scripts]
 cloudmem = "cloudmem.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-mock"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
 
 [tool.setuptools.packages.find]
 where = ["."]

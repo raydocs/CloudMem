@@ -44,6 +44,7 @@ def cmd_init(args):
     import json
     from pathlib import Path
     from .entity_detector import scan_for_detection, detect_entities, confirm_entities
+    from cloudmem.project_init import bootstrap_project_config
 
     # Pass 1: auto-detect people and projects from file content
     print(f"\n  Scanning for entities in: {args.dir}")
@@ -62,6 +63,10 @@ def cmd_init(args):
                 print(f"  Entities saved: {entities_path}")
         else:
             print("  No entities detected — proceeding with directory-based rooms.")
+
+    config_path = bootstrap_project_config(args.dir)
+    if config_path.exists():
+        print(f"[cloudmem] Project config: {config_path}")
 
     # Pass 2: initialize config (room detection via folder structure is done at mine time)
     MempalaceConfig().init()
@@ -140,7 +145,7 @@ def cmd_split(args):
         argv += ["--min-sessions", str(args.min_sessions)]
 
     old_argv = sys.argv
-    sys.argv = ["mempalace split"] + argv
+    sys.argv = ["cloudmem split"] + argv
     try:
         split_main()
     finally:
@@ -154,10 +159,24 @@ def cmd_status(args):
     status(palace_path=palace_path)
 
 
+def cmd_onboard(args):
+    from .onboarding import run_onboarding
+
+    config_dir = None
+    if getattr(args, "config_dir", None):
+        config_dir = Path(args.config_dir).expanduser().resolve()
+
+    run_onboarding(
+        directory=getattr(args, "directory", "."),
+        config_dir=config_dir,
+        auto_detect=not getattr(args, "no_auto_detect", False),
+    )
+
+
 def cmd_compress(args):
     """Compress drawers in a wing using AAAK Dialect."""
-    import chromadb
     from .dialect import Dialect
+    from .storage import get_chroma_client, get_collection_name
 
     palace_path = os.path.expanduser(args.palace) if args.palace else MempalaceConfig().palace_path
 
@@ -177,11 +196,11 @@ def cmd_compress(args):
 
     # Connect to palace
     try:
-        client = chromadb.PersistentClient(path=palace_path)
-        col = client.get_collection("mempalace_drawers")
+        client = get_chroma_client(Path(palace_path))
+        col = client.get_collection(get_collection_name())
     except Exception:
         print(f"\n  No palace found at {palace_path}")
-        print("  Run: mempalace init <dir> then mempalace mine <dir>")
+        print("  Run: cloudmem init <dir> then cloudmem mine <dir>")
         sys.exit(1)
 
     # Query drawers in the wing
@@ -266,41 +285,18 @@ def cmd_compress(args):
 
 def cmd_export(args):
     """Export palace drawers to a portable JSON snapshot."""
-    import json
-    import chromadb
     from datetime import datetime
-    from .config import MempalaceConfig
+    from .snapshot import export_snapshot
 
     palace_path = os.path.expanduser(args.palace) if args.palace else MempalaceConfig().palace_path
     output = args.output or f"cloudmem_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     wing_filter = getattr(args, "wing", None)
 
     try:
-        client = chromadb.PersistentClient(path=palace_path)
-        col = client.get_collection("mempalace_drawers")
-    except Exception:
-        print(f"✗ No palace found at {palace_path}")
+        snapshot = export_snapshot(output, palace_path=palace_path, wing=wing_filter)
+    except Exception as e:
+        print(f"✗ Export failed: {e}")
         sys.exit(1)
-
-    kwargs = {"include": ["documents", "metadatas"]}
-    if wing_filter:
-        kwargs["where"] = {"wing": wing_filter}
-    results = col.get(**kwargs)
-
-    snapshot = {
-        "version": 1,
-        "exported_at": datetime.now().isoformat(),
-        "palace_path": palace_path,
-        "wing_filter": wing_filter,
-        "count": len(results["ids"]),
-        "drawers": [
-            {"id": id_, "content": doc, "metadata": meta}
-            for id_, doc, meta in zip(results["ids"], results["documents"], results["metadatas"])
-        ]
-    }
-
-    with open(output, "w") as f:
-        json.dump(snapshot, f, indent=2)
 
     print(f"✓ Exported {snapshot['count']} drawers → {output}")
 
@@ -308,8 +304,7 @@ def cmd_export(args):
 def cmd_import(args):
     """Import a portable JSON snapshot into the palace (rebuilds ChromaDB embeddings)."""
     import json
-    import chromadb
-    from .config import MempalaceConfig
+    from .snapshot import import_snapshot
 
     palace_path = os.path.expanduser(args.palace) if args.palace else MempalaceConfig().palace_path
     dry_run = getattr(args, "dry_run", False)
@@ -324,26 +319,45 @@ def cmd_import(args):
         print(f"  DRY RUN — would import {len(drawers)} drawers into {palace_path}")
         return
 
-    client = chromadb.PersistentClient(path=palace_path)
-    col = client.get_or_create_collection("mempalace_drawers")
+    try:
+        result = import_snapshot(args.file, palace_path=palace_path, replace=False)
+    except Exception as e:
+        print(f"✗ Import failed: {e}")
+        sys.exit(1)
 
-    imported = 0
-    skipped = 0
-    for drawer in drawers:
-        try:
-            col.add(
-                ids=[drawer["id"]],
-                documents=[drawer["content"]],
-                metadatas=[drawer["metadata"]],
-            )
-            imported += 1
-        except Exception as e:
-            if "already exists" in str(e).lower():
-                skipped += 1
-            else:
-                print(f"  ✗ {drawer['id']}: {e}")
+    print(
+        f"✓ Imported {result['imported']} drawers ({result['skipped']} already existed) → {palace_path}"
+    )
 
-    print(f"✓ Imported {imported} drawers ({skipped} already existed) → {palace_path}")
+
+def cmd_thread_list(args):
+    from .thread_ledger import format_thread_line, list_threads
+
+    rows = list_threads(limit=getattr(args, "limit", 20))
+    if not rows:
+        print("No thread records yet.")
+        return
+
+    for row in rows:
+        print(format_thread_line(row))
+
+
+def cmd_thread_show(args):
+    import json
+    from .thread_ledger import load_thread
+
+    row = load_thread(args.thread_id)
+    if row is None:
+        print(f"✗ Thread not found: {args.thread_id}")
+        sys.exit(1)
+
+    print(json.dumps(row, indent=2, ensure_ascii=False))
+
+
+def cmd_thread_serve(args):
+    from .thread_web import serve_threads
+
+    serve_threads(host=args.host, port=args.port)
 
 
 def main():
@@ -380,7 +394,7 @@ def main():
     p_mine.add_argument(
         "--agent",
         default="mempalace",
-        help="Your name — recorded on every drawer (default: mempalace)",
+        help="Your name — recorded on every drawer", 
     )
     p_mine.add_argument("--limit", type=int, default=0, help="Max files to process (0 = all)")
     p_mine.add_argument(
@@ -445,6 +459,27 @@ def main():
     # status
     sub.add_parser("status", help="Show what's been filed")
 
+    # onboard
+    p_onboard = sub.add_parser(
+        "onboard",
+        help="Run interactive onboarding to build identity, entity registry, and AAAK entities",
+    )
+    p_onboard.add_argument(
+        "--directory",
+        default=".",
+        help="Directory to scan for auto-detected entities (default: current directory)",
+    )
+    p_onboard.add_argument(
+        "--config-dir",
+        default=None,
+        help="Override CloudMem config directory (default: ~/.cloudmem)",
+    )
+    p_onboard.add_argument(
+        "--no-auto-detect",
+        action="store_true",
+        help="Skip optional file scan for additional entity candidates",
+    )
+
     # sync-init
     p_sync_init = sub.add_parser("sync-init", help="Link CloudMem storage root to a private GitHub repo")
     p_sync_init.add_argument("url", help="GitHub remote URL (SSH or HTTPS)")
@@ -473,6 +508,20 @@ def main():
     p_import.add_argument("file", help="Path to export file")
     p_import.add_argument("--dry-run", action="store_true", help="Preview without importing")
 
+    # thread ledger
+    p_thread = sub.add_parser("thread", help="Inspect AMP-style thread logs")
+    sub_thread = p_thread.add_subparsers(dest="thread_cmd")
+
+    p_thread_list = sub_thread.add_parser("list", help="List recent threads")
+    p_thread_list.add_argument("--limit", type=int, default=20, help="Max rows (default: 20)")
+
+    p_thread_show = sub_thread.add_parser("show", help="Show one thread by id")
+    p_thread_show.add_argument("thread_id", help="Thread/session identifier")
+
+    p_thread_serve = sub_thread.add_parser("serve", help="Serve local web UI for threads")
+    p_thread_serve.add_argument("--host", default="127.0.0.1", help="Bind host (default 127.0.0.1)")
+    p_thread_serve.add_argument("--port", type=int, default=8788, help="Bind port (default 8788)")
+
     # session-finalize (called by post-session.sh hook, reads stdin JSON)
     p_sf = sub.add_parser("session-finalize", help=argparse.SUPPRESS)
     p_sf.add_argument("--hook-json-stdin", action="store_true",
@@ -496,6 +545,20 @@ def main():
         else:
             print(f"✗ {d.get('error', 'failed')}", d.get("hint", d.get("detail", "")),
                   file=sys.stderr)
+            sys.exit(1)
+
+    if args.command == "thread":
+        if args.thread_cmd == "list":
+            cmd_thread_list(args)
+            return
+        if args.thread_cmd == "show":
+            cmd_thread_show(args)
+            return
+        if args.thread_cmd == "serve":
+            cmd_thread_serve(args)
+            return
+        p_thread.print_help()
+        return
 
     dispatch = {
         "init": cmd_init,
@@ -505,6 +568,7 @@ def main():
         "compress": cmd_compress,
         "wake-up": cmd_wakeup,
         "status": cmd_status,
+        "onboard": cmd_onboard,
         "sync-init": lambda a: _sync_cmd("init_sync", a.url),
         "sync-status": lambda a: _sync_cmd("status"),
         "push": lambda a: _sync_cmd("push", a.message),
@@ -520,12 +584,15 @@ def main():
 def _cmd_session_finalize(args):
     """Orchestrate post-session: ingest transcript + push palace."""
     from .session_finalizer import SessionFinalizer
+
     finalizer = SessionFinalizer()
-    finalizer.run(
+    ok = finalizer.run(
         hook_json_stdin=getattr(args, "hook_json_stdin", False),
         session_id=getattr(args, "session_id", None),
         transcript_path=getattr(args, "transcript", None),
     )
+    if not ok:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

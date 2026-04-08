@@ -42,13 +42,15 @@ import sqlite3
 from datetime import date, datetime
 from pathlib import Path
 
+from cloudmem.paths import get_knowledge_graph_path, legacy_fallback
 
-DEFAULT_KG_PATH = os.path.expanduser("~/.mempalace/knowledge_graph.sqlite3")
+
+DEFAULT_KG_PATH = legacy_fallback(get_knowledge_graph_path(), "knowledge_graph.sqlite3")
 
 
 class KnowledgeGraph:
     def __init__(self, db_path: str = None):
-        self.db_path = db_path or DEFAULT_KG_PATH
+        self.db_path = str(db_path or DEFAULT_KG_PATH)
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 

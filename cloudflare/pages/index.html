@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CloudMem · Thread Ledger</title>
+    <style>
+      :root {
+        --bg: #070b14;
+        --panel: #0e1525cc;
+        --line: #ffffff1a;
+        --text: #e8ecff;
+        --muted: #a8b3d1;
+        --brand: #7c8dff;
+        --brand2: #53d3ff;
+        --ok: #56d39b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--text);
+        background:
+          radial-gradient(1200px 700px at 10% -10%, #3348ff30, transparent 60%),
+          radial-gradient(900px 600px at 90% -20%, #27d4ff2b, transparent 60%),
+          var(--bg);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      }
+      .wrap { max-width: 1240px; margin: 0 auto; padding: 22px; }
+      .top {
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, #141e36c7, #0e1525c2);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 14px;
+        box-shadow: 0 20px 60px #00000040;
+      }
+      .title { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+      .dot { width: 10px; height: 10px; border-radius: 999px; background: linear-gradient(90deg, var(--brand), var(--brand2)); }
+      h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+      .muted { color: var(--muted); font-size: 12px; }
+      .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      input, button, select {
+        border: 1px solid var(--line);
+        background: #0c1322;
+        color: var(--text);
+        padding: 9px 12px;
+        border-radius: 10px;
+        font: inherit;
+      }
+      input.api { flex: 1; min-width: 320px; }
+      button {
+        cursor: pointer;
+        background: linear-gradient(90deg, #5f72ff, #49d1ff);
+        color: #081120;
+        font-weight: 650;
+        border: none;
+      }
+      .btn-ghost { background: #111a2dcc; color: var(--text); border: 1px solid var(--line); }
+      .stats { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+      .chip {
+        border: 1px solid var(--line);
+        background: #101a2fbf;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .grid { margin-top: 14px; display: grid; grid-template-columns: 420px 1fr; gap: 14px; }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel);
+        backdrop-filter: blur(10px);
+        min-height: 66vh;
+        box-shadow: 0 12px 40px #0000002e;
+      }
+      .card h2 { margin: 0; padding: 14px 14px 10px; font-size: 14px; color: #d6defb; }
+      .list-controls { display:flex; gap:8px; flex-wrap:wrap; padding: 0 10px 10px; }
+      .list { max-height: calc(66vh - 128px); overflow: auto; padding: 0 10px 10px; }
+      .item {
+        border: 1px solid #ffffff16;
+        border-radius: 12px;
+        padding: 10px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        background: linear-gradient(180deg, #121d33b8, #0f172a9e);
+      }
+      .item:hover, .item.active { border-color: #95a8ff88; }
+      .id { font-size: 13px; font-weight: 600; word-break: break-all; }
+      .meta { margin-top: 5px; color: var(--muted); font-size: 12px; }
+      .right-head {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 12px 14px; border-bottom: 1px solid var(--line);
+      }
+      .badge { color: #082018; background: var(--ok); padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+      .section { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+      .mini-grid { display:grid; gap:8px; grid-template-columns: repeat(3, minmax(0,1fr)); }
+      .mini {
+        border:1px solid var(--line);
+        border-radius:10px;
+        padding:8px;
+        background:#101a2fbf;
+      }
+      .mini .k { font-size:11px; color:var(--muted); }
+      .mini .v { margin-top:3px; font-size:14px; font-weight:650; }
+      canvas { width:100%; height:140px; display:block; border-radius:10px; background:#0b1220; border:1px solid var(--line); }
+      pre { margin: 0; padding: 14px; white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.5; color: #dbe5ff; }
+      code { color: #c8d6ff; }
+      @media (max-width: 980px) {
+        .grid { grid-template-columns: 1fr; }
+        .card { min-height: 46vh; }
+        .list { max-height: 36vh; }
+        .mini-grid { grid-template-columns: 1fr 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="top">
+        <div class="title">
+          <div class="dot"></div>
+          <h1>CloudMem Thread Ledger</h1>
+        </div>
+        <div class="row">
+          <input id="api" class="api" placeholder="API 基地址（例如 https://api.littlescene.com）" />
+          <button id="save">保存并刷新</button>
+          <button id="load" class="btn-ghost">仅刷新</button>
+        </div>
+        <div class="muted" style="margin-top:8px">推荐：Worker 用 <code>api.littlescene.com</code>，Pages 用 <code>threads.littlescene.com</code></div>
+        <div class="stats">
+          <span class="chip" id="statCount">会话：-</span>
+          <span class="chip" id="statTokens">Tokens：-</span>
+          <span class="chip" id="statCost">成本：-</span>
+          <span class="chip" id="statLast">最近结束：-</span>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>线程列表</h2>
+          <div class="list-controls">
+            <input id="search" placeholder="搜索 thread_id / repo / branch" />
+            <select id="repo"><option value="">全部仓库</option></select>
+            <select id="branch"><option value="">全部分支</option></select>
+          </div>
+          <div id="threads" class="list">准备加载...</div>
+        </article>
+
+        <article class="card">
+          <div class="right-head">
+            <h2 style="padding:0">仪表盘</h2>
+            <span class="badge">LIVE</span>
+          </div>
+
+          <div class="section">
+            <div class="muted" style="margin-bottom:8px">最近 7 天会话趋势</div>
+            <canvas id="chart" width="760" height="140"></canvas>
+          </div>
+
+          <div class="section">
+            <div class="mini-grid">
+              <div class="mini"><div class="k">筛选后会话</div><div class="v" id="kpiSessions">-</div></div>
+              <div class="mini"><div class="k">输入 Tokens</div><div class="v" id="kpiInput">-</div></div>
+              <div class="mini"><div class="k">输出 Tokens</div><div class="v" id="kpiOutput">-</div></div>
+            </div>
+          </div>
+
+          <pre id="detail">点击左侧线程查看详情</pre>
+        </article>
+      </section>
+    </div>
+
+    <script>
+      const apiInput = document.getElementById('api');
+      const threadsEl = document.getElementById('threads');
+      const detailEl = document.getElementById('detail');
+      const repoSel = document.getElementById('repo');
+      const branchSel = document.getElementById('branch');
+      const searchInput = document.getElementById('search');
+      const KEY = 'cloudmem_api_base';
+
+      const statCount = document.getElementById('statCount');
+      const statTokens = document.getElementById('statTokens');
+      const statCost = document.getElementById('statCost');
+      const statLast = document.getElementById('statLast');
+      const kpiSessions = document.getElementById('kpiSessions');
+      const kpiInput = document.getElementById('kpiInput');
+      const kpiOutput = document.getElementById('kpiOutput');
+
+      const inferred = (location.hostname === 'threads.littlescene.com') ? 'https://api.littlescene.com' : '';
+      const defaultApi = (window.CLOUDMEM_API_BASE || inferred || '').trim();
+      apiInput.value = localStorage.getItem(KEY) || defaultApi;
+
+      let allRows = [];
+      let filtered = [];
+      let activeId = null;
+
+      function base() {
+        return (apiInput.value || '').trim().replace(/\/$/, '');
+      }
+
+      function n(x) { return Number(x || 0); }
+      function fmt(num) { return new Intl.NumberFormat('en-US').format(n(num)); }
+
+      function setTopStats(rows) {
+        const inTok = rows.reduce((s, r) => s + n(r.token_input), 0);
+        const outTok = rows.reduce((s, r) => s + n(r.token_output), 0);
+        const cost = rows.reduce((s, r) => s + n(r.cost_usd), 0);
+        statCount.textContent = `会话：${rows.length}`;
+        statTokens.textContent = `Tokens：${fmt(inTok + outTok)}`;
+        statCost.textContent = `成本：$${cost.toFixed(4)}`;
+        statLast.textContent = `最近结束：${rows[0]?.ended_at || '-'}`;
+      }
+
+      function fillFilterOptions() {
+        const repos = [...new Set(allRows.map(r => r.repo).filter(Boolean))].sort();
+        const branches = [...new Set(allRows.map(r => r.branch).filter(Boolean))].sort();
+
+        const keepRepo = repoSel.value;
+        const keepBranch = branchSel.value;
+
+        repoSel.innerHTML = '<option value="">全部仓库</option>' + repos.map(v => `<option>${v}</option>`).join('');
+        branchSel.innerHTML = '<option value="">全部分支</option>' + branches.map(v => `<option>${v}</option>`).join('');
+
+        repoSel.value = repos.includes(keepRepo) ? keepRepo : '';
+        branchSel.value = branches.includes(keepBranch) ? keepBranch : '';
+      }
+
+      function applyFilter() {
+        const q = searchInput.value.trim().toLowerCase();
+        const repo = repoSel.value;
+        const branch = branchSel.value;
+
+        filtered = allRows.filter(r => {
+          if (repo && r.repo !== repo) return false;
+          if (branch && r.branch !== branch) return false;
+          if (!q) return true;
+          return `${r.thread_id||''} ${r.repo||''} ${r.branch||''}`.toLowerCase().includes(q);
+        });
+
+        renderKpis(filtered);
+        renderChart(filtered);
+        renderList(filtered);
+      }
+
+      function renderKpis(rows) {
+        const inTok = rows.reduce((s, r) => s + n(r.token_input), 0);
+        const outTok = rows.reduce((s, r) => s + n(r.token_output), 0);
+        kpiSessions.textContent = fmt(rows.length);
+        kpiInput.textContent = fmt(inTok);
+        kpiOutput.textContent = fmt(outTok);
+      }
+
+      function renderChart(rows) {
+        const c = document.getElementById('chart');
+        const ctx = c.getContext('2d');
+        const W = c.width, H = c.height;
+        ctx.clearRect(0, 0, W, H);
+
+        const days = [];
+        const map = new Map();
+        const now = new Date();
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(now);
+          d.setDate(now.getDate() - i);
+          const k = d.toISOString().slice(0, 10);
+          days.push(k);
+          map.set(k, 0);
+        }
+        rows.forEach(r => {
+          const k = String(r.ended_at || '').slice(0, 10);
+          if (map.has(k)) map.set(k, map.get(k) + 1);
+        });
+
+        const vals = days.map(k => map.get(k));
+        const maxV = Math.max(1, ...vals);
+
+        ctx.strokeStyle = '#ffffff22';
+        for (let i = 0; i < 4; i++) {
+          const y = 10 + (H - 24) * (i / 3);
+          ctx.beginPath();
+          ctx.moveTo(8, y);
+          ctx.lineTo(W - 8, y);
+          ctx.stroke();
+        }
+
+        const xAt = i => 12 + i * ((W - 24) / (days.length - 1));
+        const yAt = v => 10 + (H - 24) * (1 - v / maxV);
+
+        ctx.strokeStyle = '#73a3ff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        vals.forEach((v, i) => {
+          const x = xAt(i), y = yAt(v);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        vals.forEach((v, i) => {
+          const x = xAt(i), y = yAt(v);
+          ctx.fillStyle = '#56d39b';
+          ctx.beginPath();
+          ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#a8b3d1';
+          ctx.font = '10px sans-serif';
+          ctx.fillText(String(v), x - 3, y - 8);
+          ctx.fillText(days[i].slice(5), x - 12, H - 4);
+        });
+      }
+
+      function renderList(rows) {
+        if (!rows.length) {
+          threadsEl.innerHTML = '暂无数据';
+          detailEl.textContent = '暂无可展示详情';
+          return;
+        }
+        threadsEl.innerHTML = rows.map(r => `
+          <div class="item ${activeId===r.thread_id?'active':''}" data-id="${r.thread_id}">
+            <div class="id">${r.thread_id}</div>
+            <div class="meta">${r.repo || '-'} · ${r.branch || '-'} · ${r.mode || '-'} · ${r.ended_at || '-'}</div>
+          </div>
+        `).join('');
+
+        for (const el of threadsEl.querySelectorAll('.item')) {
+          el.addEventListener('click', () => {
+            activeId = el.dataset.id;
+            loadDetail(activeId).then(() => renderList(rows));
+          });
+        }
+
+        if (!activeId || !rows.some(r => r.thread_id === activeId)) {
+          activeId = rows[0].thread_id;
+          loadDetail(activeId).then(() => renderList(rows));
+        }
+      }
+
+      async function loadThreads() {
+        threadsEl.innerHTML = '加载中...';
+        const b = base();
+        if (!b) {
+          threadsEl.innerHTML = '请先填写 API 基地址';
+          return;
+        }
+        try {
+          const res = await fetch(`${b}/v1/threads?limit=200`);
+          const data = await res.json();
+          allRows = (data.threads || []).sort((a,b)=>String(b.ended_at||'').localeCompare(String(a.ended_at||'')));
+          setTopStats(allRows);
+          fillFilterOptions();
+          applyFilter();
+        } catch (e) {
+          threadsEl.innerHTML = `加载失败：${e.message}`;
+        }
+      }
+
+      async function loadDetail(threadId) {
+        const b = base();
+        try {
+          const res = await fetch(`${b}/v1/thread/${encodeURIComponent(threadId)}`);
+          const data = await res.json();
+          detailEl.textContent = JSON.stringify(data.thread || data, null, 2);
+        } catch (e) {
+          detailEl.textContent = `加载详情失败：${e.message}`;
+        }
+      }
+
+      document.getElementById('save').addEventListener('click', () => {
+        localStorage.setItem(KEY, base());
+        loadThreads();
+      });
+      document.getElementById('load').addEventListener('click', loadThreads);
+      repoSel.addEventListener('change', applyFilter);
+      branchSel.addEventListener('change', applyFilter);
+      searchInput.addEventListener('input', applyFilter);
+
+      if (base()) loadThreads();
+    </script>
+  </body>
+</html>

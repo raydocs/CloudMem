@@ -12,18 +12,20 @@ Load only what you need, when you need it.
 
 Wake-up cost: ~600-900 tokens (L0+L1). Leaves 95%+ of context free.
 
-Reads directly from ChromaDB (mempalace_drawers)
-and ~/.mempalace/identity.txt.
+Reads directly from the ChromaDB drawer collection
+and ~/.cloudmem/identity.txt.
 """
 
 import os
 import sys
+import heapq
 from pathlib import Path
 from collections import defaultdict
 
-import chromadb
-
 from .config import MempalaceConfig
+from .storage import get_drawer_collection, iter_collection_rows
+from .paths import get_identity_path, legacy_fallback
+from .searcher import search_memories
 
 
 # ---------------------------------------------------------------------------
@@ -34,7 +36,7 @@ from .config import MempalaceConfig
 class Layer0:
     """
     ~100 tokens. Always loaded.
-    Reads from ~/.mempalace/identity.txt — a plain-text file the user writes.
+    Reads from ~/.cloudmem/identity.txt — a plain-text file the user writes.
 
     Example identity.txt:
         I am Atlas, a personal AI assistant for Alice.
@@ -45,8 +47,8 @@ class Layer0:
 
     def __init__(self, identity_path: str = None):
         if identity_path is None:
-            identity_path = os.path.expanduser("~/.mempalace/identity.txt")
-        self.path = identity_path
+            identity_path = legacy_fallback(get_identity_path(), "identity.txt")
+        self.path = str(identity_path)
         self._text = None
 
     def render(self) -> str:
@@ -59,7 +61,7 @@ class Layer0:
                 self._text = f.read().strip()
         else:
             self._text = (
-                "## L0 — IDENTITY\nNo identity configured. Create ~/.mempalace/identity.txt"
+                f"## L0 — IDENTITY\nNo identity configured. Create {get_identity_path()}"
             )
 
         return self._text
@@ -91,49 +93,46 @@ class Layer1:
     def generate(self) -> str:
         """Pull top drawers from ChromaDB and format as compact L1 text."""
         try:
-            client = chromadb.PersistentClient(path=self.palace_path)
-            col = client.get_collection("mempalace_drawers")
+            col = get_drawer_collection(palace_path=Path(self.palace_path), create=False)
         except Exception:
             return "## L1 — No palace found. Run: mempalace mine <dir>"
 
-        # Fetch all drawers (with optional wing filter)
-        kwargs = {"include": ["documents", "metadatas"]}
-        if self.wing:
-            kwargs["where"] = {"wing": self.wing}
-
+        # Keep only the highest-signal drawers instead of materializing the full collection.
+        top_drawers = []
         try:
-            results = col.get(**kwargs)
+            for row_index, row in enumerate(
+                iter_collection_rows(
+                    col,
+                    include=["documents", "metadatas"],
+                    where={"wing": self.wing} if self.wing else None,
+                )
+            ):
+                doc = row.get("document") or ""
+                meta = row.get("metadata") or {}
+                importance = 3
+                for key in ("importance", "emotional_weight", "weight"):
+                    val = meta.get(key)
+                    if val is not None:
+                        try:
+                            importance = float(val)
+                        except (ValueError, TypeError):
+                            pass
+                        break
+                filed_at = str(meta.get("filed_at") or "")
+                heapq.heappush(top_drawers, (importance, filed_at, row_index, meta, doc))
+                if len(top_drawers) > self.MAX_DRAWERS:
+                    heapq.heappop(top_drawers)
         except Exception:
             return "## L1 — No drawers found."
 
-        docs = results.get("documents", [])
-        metas = results.get("metadatas", [])
-
-        if not docs:
+        if not top_drawers:
             return "## L1 — No memories yet."
 
-        # Score each drawer: prefer high importance, recent filing
-        scored = []
-        for doc, meta in zip(docs, metas):
-            importance = 3
-            # Try multiple metadata keys that might carry weight info
-            for key in ("importance", "emotional_weight", "weight"):
-                val = meta.get(key)
-                if val is not None:
-                    try:
-                        importance = float(val)
-                    except (ValueError, TypeError):
-                        pass
-                    break
-            scored.append((importance, meta, doc))
-
-        # Sort by importance descending, take top N
-        scored.sort(key=lambda x: x[0], reverse=True)
-        top = scored[: self.MAX_DRAWERS]
+        top = sorted(top_drawers, key=lambda item: (item[0], item[1], item[2]), reverse=True)
 
         # Group by room for readability
         by_room = defaultdict(list)
-        for imp, meta, doc in top:
+        for imp, _filed_at, _row_index, meta, doc in top:
             room = meta.get("room", "general")
             by_room[room].append((imp, meta, doc))
 
@@ -187,8 +186,7 @@ class Layer2:
     def retrieve(self, wing: str = None, room: str = None, n_results: int = 10) -> str:
         """Retrieve drawers filtered by wing and/or room."""
         try:
-            client = chromadb.PersistentClient(path=self.palace_path)
-            col = client.get_collection("mempalace_drawers")
+            col = get_drawer_collection(palace_path=Path(self.palace_path), create=False)
         except Exception:
             return "No palace found."
 
@@ -241,7 +239,7 @@ class Layer2:
 class Layer3:
     """
     Unlimited depth. Semantic search against the full palace.
-    Reuses searcher.py logic against mempalace_drawers.
+    Reuses searcher.py logic against the drawer collection.
     """
 
     def __init__(self, palace_path: str = None):
@@ -250,55 +248,32 @@ class Layer3:
 
     def search(self, query: str, wing: str = None, room: str = None, n_results: int = 5) -> str:
         """Semantic search, returns compact result text."""
-        try:
-            client = chromadb.PersistentClient(path=self.palace_path)
-            col = client.get_collection("mempalace_drawers")
-        except Exception:
-            return "No palace found."
+        payload = search_memories(
+            query,
+            palace_path=self.palace_path,
+            wing=wing,
+            room=room,
+            n_results=n_results,
+        )
+        if payload.get("error"):
+            return payload["error"]
 
-        where = {}
-        if wing and room:
-            where = {"$and": [{"wing": wing}, {"room": room}]}
-        elif wing:
-            where = {"wing": wing}
-        elif room:
-            where = {"room": room}
-
-        kwargs = {
-            "query_texts": [query],
-            "n_results": n_results,
-            "include": ["documents", "metadatas", "distances"],
-        }
-        if where:
-            kwargs["where"] = where
-
-        try:
-            results = col.query(**kwargs)
-        except Exception as e:
-            return f"Search error: {e}"
-
-        docs = results["documents"][0]
-        metas = results["metadatas"][0]
-        dists = results["distances"][0]
-
-        if not docs:
+        hits = payload.get("results", [])
+        if not hits:
             return "No results found."
 
         lines = [f'## L3 — SEARCH RESULTS for "{query}"']
-        for i, (doc, meta, dist) in enumerate(zip(docs, metas, dists), 1):
-            similarity = round(1 - dist, 3)
-            wing_name = meta.get("wing", "?")
-            room_name = meta.get("room", "?")
-            source = Path(meta.get("source_file", "")).name if meta.get("source_file") else ""
-
-            snippet = doc.strip().replace("\n", " ")
+        for i, hit in enumerate(hits, 1):
+            snippet = hit["text"].strip().replace("\n", " ")
             if len(snippet) > 300:
                 snippet = snippet[:297] + "..."
 
-            lines.append(f"  [{i}] {wing_name}/{room_name} (sim={similarity})")
+            lines.append(
+                f"  [{i}] {hit['wing']}/{hit['room']} (score={hit['score']}, dist={hit['distance']})"
+            )
             lines.append(f"      {snippet}")
-            if source:
-                lines.append(f"      src: {source}")
+            if hit.get("source_name"):
+                lines.append(f"      src: {hit['source_name']}")
 
         return "\n".join(lines)
 
@@ -306,50 +281,14 @@ class Layer3:
         self, query: str, wing: str = None, room: str = None, n_results: int = 5
     ) -> list:
         """Return raw dicts instead of formatted text."""
-        try:
-            client = chromadb.PersistentClient(path=self.palace_path)
-            col = client.get_collection("mempalace_drawers")
-        except Exception:
-            return []
-
-        where = {}
-        if wing and room:
-            where = {"$and": [{"wing": wing}, {"room": room}]}
-        elif wing:
-            where = {"wing": wing}
-        elif room:
-            where = {"room": room}
-
-        kwargs = {
-            "query_texts": [query],
-            "n_results": n_results,
-            "include": ["documents", "metadatas", "distances"],
-        }
-        if where:
-            kwargs["where"] = where
-
-        try:
-            results = col.query(**kwargs)
-        except Exception:
-            return []
-
-        hits = []
-        for doc, meta, dist in zip(
-            results["documents"][0],
-            results["metadatas"][0],
-            results["distances"][0],
-        ):
-            hits.append(
-                {
-                    "text": doc,
-                    "wing": meta.get("wing", "unknown"),
-                    "room": meta.get("room", "unknown"),
-                    "source_file": Path(meta.get("source_file", "?")).name,
-                    "similarity": round(1 - dist, 3),
-                    "metadata": meta,
-                }
-            )
-        return hits
+        payload = search_memories(
+            query,
+            palace_path=self.palace_path,
+            wing=wing,
+            room=room,
+            n_results=n_results,
+        )
+        return payload.get("results", []) if not payload.get("error") else []
 
 
 # ---------------------------------------------------------------------------
@@ -370,7 +309,9 @@ class MemoryStack:
     def __init__(self, palace_path: str = None, identity_path: str = None):
         cfg = MempalaceConfig()
         self.palace_path = palace_path or cfg.palace_path
-        self.identity_path = identity_path or os.path.expanduser("~/.mempalace/identity.txt")
+        self.identity_path = str(
+            identity_path or legacy_fallback(get_identity_path(), "identity.txt")
+        )
 
         self.l0 = Layer0(self.identity_path)
         self.l1 = Layer1(self.palace_path)
@@ -428,8 +369,7 @@ class MemoryStack:
 
         # Count drawers
         try:
-            client = chromadb.PersistentClient(path=self.palace_path)
-            col = client.get_collection("mempalace_drawers")
+            col = get_drawer_collection(palace_path=Path(self.palace_path), create=False)
             count = col.count()
             result["total_drawers"] = count
         except Exception:

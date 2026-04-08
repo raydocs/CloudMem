@@ -1,0 +1,27 @@
+name = "cloudmem-thread-ledger"
+main = "worker.mjs"
+compatibility_date = "2026-04-07"
+
+[[d1_databases]]
+binding = "THREADS_DB"
+database_name = "cloudmem-threads"
+database_id = "4633c0cc-28d2-4660-aa75-b2b0eebcb6b0"
+
+[[r2_buckets]]
+binding = "THREADS_R2"
+bucket_name = "cloudmem-threads"
+
+[vars]
+CORS_ORIGIN = "https://threads.littlescene.com"
+
+[[routes]]
+pattern = "api.littlescene.com"
+custom_domain = true
+
+[[routes]]
+pattern = "littlescene.com"
+custom_domain = true
+
+[[routes]]
+pattern = "www.littlescene.com"
+custom_domain = true

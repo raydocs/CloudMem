@@ -46,8 +46,14 @@
 # Set MEMPAL_DIR below if you want the hook to auto-ingest before compaction.
 # Leave blank to rely on the AI's own save instructions.
 
-STATE_DIR="$HOME/.mempalace/hook_state"
-mkdir -p "$STATE_DIR"
+LEGACY_STATE_DIR="$HOME/.mempalace/hook_state"
+STATE_BASE="${CLOUDMEM_HOME:-$HOME/.cloudmem}"
+STATE_DIR="$STATE_BASE/hook_state"
+
+if ! mkdir -p "$STATE_DIR" 2>/dev/null; then
+    STATE_DIR="$LEGACY_STATE_DIR"
+    mkdir -p "$STATE_DIR"
+fi
 
 # Optional: set to the directory you want auto-ingested before compaction.
 # Example: MEMPAL_DIR="$HOME/conversations"
@@ -65,7 +71,7 @@ echo "[$(date '+%H:%M:%S')] PRE-COMPACT triggered for session $SESSION_ID" >> "$
 if [ -n "$MEMPAL_DIR" ] && [ -d "$MEMPAL_DIR" ]; then
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     REPO_DIR="$(dirname "$SCRIPT_DIR")"
-    python3 -m mempalace mine "$MEMPAL_DIR" >> "$STATE_DIR/hook.log" 2>&1
+    python3 -m cloudmem mine "$MEMPAL_DIR" >> "$STATE_DIR/hook.log" 2>&1
 fi
 
 # Always block — compaction = save everything
